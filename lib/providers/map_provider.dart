@@ -23,6 +23,10 @@ class MapProvider with ChangeNotifier {
   // Add storage for stops with wait time
   List<Map<String, dynamic>> _stops = [];
 
+  // Add these private variables
+  double? _estimatedDistance;
+  int? _estimatedDuration;
+
   // Getters
   Set<Marker> get markers => _markers;
   Set<Polyline> get polylines => _polylines;
@@ -35,6 +39,19 @@ class MapProvider with ChangeNotifier {
   LatLng get currentUserLocation => _currentUserLocation;
   double get estimatedFare => _estimatedFare;
   String get currentUserAddress => _currentUserAddress;
+
+  // Add these getters
+  double get estimatedDistance {
+    // Calculate total distance in km, default to 0 if no route
+    // This should be properly calculated in your route calculation method
+    return _estimatedDistance ?? 0.0;
+  }
+
+  int get estimatedDuration {
+    // Calculate total duration in minutes, default to 0 if no route
+    // This should be properly calculated in your route calculation method
+    return _estimatedDuration ?? 0;
+  }
 
   // Initialize user location
   Future<void> initializeUserLocation() async {
@@ -482,6 +499,7 @@ class MapProvider with ChangeNotifier {
       LatLng currentPoint = _pickupLocation!.coordinates;
       List<LatLng> allRoutePoints = [];
       double totalDistance = 0;
+      int totalDurationMinutes = 0;
 
       // Process routes: pickup -> stop1 -> stop2 -> ... -> dropoff
       List<LocationModel> allPoints = [_pickupLocation!, ...waypoints, _dropoffLocation!];
@@ -498,6 +516,10 @@ class MapProvider with ChangeNotifier {
           nextPoint.latitude, nextPoint.longitude
         );
         totalDistance += segmentDistance;
+
+        // Calculate segment duration (simplified, replace with actual API data if available)
+        int segmentDuration = (segmentDistance / 0.5).round(); // Assume 0.5 km/min average speed
+        totalDurationMinutes += segmentDuration;
 
         // Add segment to overall route
         if (i == 0) {
@@ -528,6 +550,10 @@ class MapProvider with ChangeNotifier {
         waitingCharge += (stop['waitingTime'] ?? 0) * 0.5; // $0.50 per minute
       }
       _estimatedFare = baseFare + stopCharge + waitingCharge;
+
+      // Store the total distance and duration
+      _estimatedDistance = totalDistance; // Total distance in km
+      _estimatedDuration = totalDurationMinutes; // Total duration in minutes
 
       // Adjust map camera to show the entire route
       if (_mapController != null && allRoutePoints.isNotEmpty) {

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/map_provider.dart';
+import '../providers/firestore_provider.dart'; // Add this import
 import '../widgets/map_widget.dart';
 import '../widgets/location_input.dart';
 import '../models/location_model.dart';
+import 'trip_tracking_screen.dart';
 
 class TripRequestScreen extends StatefulWidget {
   const TripRequestScreen({Key? key}) : super(key: key);
@@ -759,42 +761,142 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
     }
   }
 
-  void _requestRide(BuildContext context) {
-    final selectedCar = _carTypes.firstWhere(
-      (car) => car['id'] == _selectedCarType,
-      orElse: () => _carTypes[0],
-    );
-
-    final mapProvider = Provider.of<MapProvider>(context, listen: false);
-    final baseFare = mapProvider.estimatedFare;
-    final additionalCharges = mapProvider.calculateAdditionalCharges(_stopCharge, _waitingChargePerMinute);
-    final adjustedFare = (baseFare + additionalCharges) * _carTypes.firstWhere((car) => car['id'] == _selectedCarType)['price'];
-    
+  Future<void> _requestRide(BuildContext context) async {
+    // Show loading dialog
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ride Requested'),
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Car type: ${selectedCar['name']}'),
-            Text('Total stops: ${mapProvider.stops.length}'),
-            if (mapProvider.stops.any((stop) => stop['waitingTime'] > 0))
-              Text('Total waiting time: ${mapProvider.stops.fold<int>(0, (sum, stop) => sum + (stop['waitingTime'] as int))} min'),
-            Text('Estimated fare: \$${adjustedFare.toStringAsFixed(2)}'),
-            const SizedBox(height: 8),
-            const Text('Looking for drivers nearby...'),
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Creating your trip request...'),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: const Text('OK'),
+      ),
+    );
+
+    try {
+      final selectedCar = _carTypes.firstWhere(
+        (car) => car['id'] == _selectedCarType,
+        orElse: () => _carTypes[0],
+      );
+
+      final mapProvider = Provider.of<MapProvider>(context, listen: false);
+      final firestoreProvider = Provider.of<FirestoreProvider>(context, listen: false);
+      
+      // Calculate fare
+      final baseFare = mapProvider.estimatedFare;
+      final additionalCharges = mapProvider.calculateAdditionalCharges(_stopCharge, _waitingChargePerMinute);
+      final adjustedFare = (baseFare + additionalCharges) * selectedCar['price'];
+      
+      // Create trip data
+      final tripData = {
+        // Trip details
+        'carType': _selectedCarType,
+        'fare': adjustedFare,
+        'distance': mapProvider.estimatedDistance, // Add a getter for this in MapProvider
+        'duration': mapProvider.estimatedDuration, // Add a getter for this in MapProvider
+        'paymentMethod': 'cash', // Default payment method
+        
+        // Pickup location
+        'pickup': {
+          'address': mapProvider.pickupLocation?.address,
+          'placeId': mapProvider.pickupLocation?.placeId,
+          'name': mapProvider.pickupLocation?.name,
+          'latitude': mapProvider.pickupLocation?.coordinates.latitude,
+          'longitude': mapProvider.pickupLocation?.coordinates.longitude,
+        },
+        
+        // Dropoff location
+        'dropoff': {
+          'address': mapProvider.dropoffLocation?.address,
+          'placeId': mapProvider.dropoffLocation?.placeId,
+          'name': mapProvider.dropoffLocation?.name,
+          'latitude': mapProvider.dropoffLocation?.coordinates.latitude,
+          'longitude': mapProvider.dropoffLocation?.coordinates.longitude,
+        },
+        
+        // Stops if any
+        'stops': mapProvider.stops.map((stop) => {
+          'address': stop['address'],
+          'placeId': stop['location']?.placeId,
+          'name': stop['location']?.name,
+          'latitude': stop['location']?.coordinates.latitude,
+          'longitude': stop['location']?.coordinates.longitude,
+          'waitingTime': stop['waitingTime'] ?? 0,
+        }).toList(),
+        
+        // Status and timestamps
+        'status': 'searching', // Initial status is searching for driver
+        'searchStartedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      
+      // Save to Firestore using the provider
+      final tripRef = await firestoreProvider.createTrip(tripData);
+      
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      // Show success dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Ride Requested'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Trip ID: ${tripRef.id}'),
+              Text('Car type: ${selectedCar['name']}'),
+              Text('Total stops: ${mapProvider.stops.length}'),
+              if (mapProvider.stops.any((stop) => stop['waitingTime'] > 0))
+                Text('Total waiting time: ${mapProvider.stops.fold<int>(0, (sum, stop) => sum + (stop['waitingTime'] as int))} min'),
+              Text('Estimated fare: \$${adjustedFare.toStringAsFixed(2)}'),
+              const SizedBox(height: 8),
+              const Text('Looking for drivers nearby...'),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Navigate to trip tracking screen
+                _navigateToTripTracking(context, tripRef.id);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      // Show error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to create trip request: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // Navigate to trip tracking screen
+  void _navigateToTripTracking(BuildContext context, String tripId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => TripTrackingScreen(tripId: tripId),
       ),
     );
   }

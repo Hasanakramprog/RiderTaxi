@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/animated_taxi_road.dart';
 import 'trip_request_screen.dart';
+import 'trip_history_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -136,7 +137,11 @@ class HomeScreen extends StatelessWidget {
                           icon: Icons.history,
                           label: 'My Trips',
                           onPressed: () {
-                            // Navigate to trip history
+                            // Navigate to trip history screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const TripHistoryScreen()),
+                            );
                           },
                         ),
                         _buildCircleButton(

@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:math';
+import 'dart:math'; // Redundant import, math is already imported as math
 import 'package:flutter/material.dart';
 
 class AnimatedTaxiRoad extends StatefulWidget {
@@ -15,48 +15,43 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
   late AnimationController _headlightController;
   late Animation<double> _taxiMovement;
   late Animation<double> _headlightOpacity;
-  
+
   @override
   void initState() {
     super.initState();
-    
-    // Road animation controller - continuous scrolling effect
+
     _roadController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-    
-    // Taxi movement controller - moves the taxi around
+
     _taxiController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat();
-    
-    // Headlight flashing controller
+
     _headlightController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
-    
-    // Complex taxi movement animation
+
     _taxiMovement = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: -0.2, end: 0.2)
-          .chain(CurveTween(curve: Curves.easeInOut)),
+            .chain(CurveTween(curve: Curves.easeInOut)),
         weight: 1,
       ),
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.2, end: -0.2)
-          .chain(CurveTween(curve: Curves.easeInOut)),
+            .chain(CurveTween(curve: Curves.easeInOut)),
         weight: 1,
       ),
     ]).animate(_taxiController);
-    
-    // Headlight animation
+
     _headlightOpacity = Tween<double>(begin: 0.5, end: 1.0)
         .animate(_headlightController);
   }
-  
+
   @override
   void dispose() {
     _taxiController.dispose();
@@ -64,11 +59,55 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
     _headlightController.dispose();
     super.dispose();
   }
-  
+
+  // Helper widget for creating glass-like windows
+  Widget _buildGlassWindow({
+    required double width,
+    required double height,
+    BorderRadius? borderRadius,
+    CustomClipper<Path>? clipper,
+    Matrix4? transform,
+    Color glassColor = const Color(0xAA607D8B), // Bluish-grey glass tint
+    Color borderColor = Colors.black38,
+  }) {
+    Widget glass = Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: glassColor,
+        borderRadius: clipper == null ? borderRadius : null,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.15),
+            glassColor.withOpacity(0.5),
+            Colors.black.withOpacity(0.2),
+          ],
+          stops: const [0.0, 0.4, 1.0],
+        ),
+        border: Border.all(color: borderColor, width: 0.75),
+      ),
+    );
+
+    if (clipper != null) {
+      glass = ClipPath(clipper: clipper, child: glass);
+    } else if (borderRadius != null) {
+      glass = ClipRRect(borderRadius: borderRadius, child: glass);
+    }
+    
+    if (transform != null) {
+      glass = Transform(transform: transform, child: glass);
+    }
+
+    return glass;
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    
+
     return SizedBox(
       height: 220,
       width: double.infinity,
@@ -87,7 +126,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               ),
             ),
           ),
-          
+
           // Buildings in background
           Positioned(
             bottom: 60, // Just above the road
@@ -138,7 +177,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               }),
             ),
           ),
-          
+
           // Clouds - floating by
           ...List.generate(3, (index) {
             final offset = index * 120.0;
@@ -160,7 +199,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               },
             );
           }),
-          
+
           // The road
           Positioned(
             bottom: 0,
@@ -181,7 +220,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               ),
             ),
           ),
-          
+
           // Road markings - scrolling by
           AnimatedBuilder(
             animation: _roadController,
@@ -205,7 +244,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               );
             },
           ),
-          
+
           // The taxi car with animation
           AnimatedBuilder(
             animation: _taxiMovement,
@@ -223,7 +262,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               );
             },
           ),
-          
+
           // Reflection of car on the road
           AnimatedBuilder(
             animation: _taxiMovement,
@@ -266,21 +305,36 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
       ),
     );
   }
-  
+
   Widget _buildTaxi() {
+    // Dimensions for car parts
+    const double carBodyWidth = 95;
+    const double carBodyHeight = 30; // Lowered for better proportion with cabin
+    const double cabinWidth = 70;
+    const double cabinHeight = 22; // Adjusted cabin height
+    const double cabinTopOffset = 3; // How much cabin sits above the lower body's top
+    
+    // Windshield properties
+    const double windshieldHeight = cabinHeight - 2;
+    const double windshieldWidth = 20; // Width at the top of windshield
+
+    // Rear window properties
+    const double rearWindowHeight = cabinHeight - 4;
+    const double rearWindowWidth = 18;
+
+
     return SizedBox(
       width: 120,
-      height: 65,  // Slightly taller for better proportions
+      height: 65,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Enhanced car shadow with dynamic sizing
+          // Enhanced car shadow
           Positioned(
             bottom: -4,
             child: AnimatedBuilder(
               animation: _taxiMovement,
               builder: (context, child) {
-                // Shadow changes shape based on car movement
                 return Container(
                   width: 100 + (_taxiMovement.value * 8).abs(),
                   height: 14 - (_taxiMovement.value * 4).abs(),
@@ -299,8 +353,8 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               },
             ),
           ),
-          
-          // Undercarriage (dark shadow under car body)
+
+          // Undercarriage
           Positioned(
             bottom: 6,
             child: Container(
@@ -312,47 +366,52 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               ),
             ),
           ),
-          
-          // Main body with unified solid shape (no windows)
-          Container(
-            width: 95,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.amber,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0.1, 0.3, 0.7, 1.0],
-                colors: [
-                  Colors.amber.shade400,  // Light reflection at top
-                  Colors.amber.shade500,  // Main body color
-                  Colors.amber.shade600,  // Shadow area
-                  Colors.amber.shade700,  // Bottom shadow
+
+          // Main LOWER body part
+          Positioned(
+            bottom: 12, // Position of the lower body
+            child: Container(
+              width: carBodyWidth,
+              height: carBodyHeight,
+              decoration: BoxDecoration(
+                color: Colors.amber,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 5,
+                    offset: const Offset(0, 3),
+                  ),
                 ],
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.1, 0.3, 0.7, 1.0],
+                  colors: [
+                    Colors.amber.shade400,
+                    Colors.amber.shade500,
+                    Colors.amber.shade600,
+                    Colors.amber.shade700,
+                  ],
+                ),
               ),
             ),
           ),
           
-          // Hood of car (front part)
+          // Hood of car (front part) - relative to the lower body position
           Positioned(
-            right: 0,
-            bottom: 12,
+            right: (120 - carBodyWidth) / 2 - 2, // Align with carBody edge
+            bottom: 12, // Same level as carBody bottom edge
             child: Container(
-              width: 25,
-              height: 26,
+              width: 25, // Width of the hood extending forward
+              height: carBodyHeight * 0.85, // Slightly lower than main body
               decoration: BoxDecoration(
                 color: Colors.amber.shade500,
                 borderRadius: const BorderRadius.only(
                   topRight: Radius.circular(15),
                   bottomRight: Radius.circular(8),
+                  topLeft: Radius.circular(5), // Slight curve towards body
+                  bottomLeft: Radius.circular(3),
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -365,19 +424,21 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               ),
             ),
           ),
-          
-          // Trunk of car (back part)
+
+          // Trunk of car (back part) - relative to the lower body position
           Positioned(
-            left: 0,
-            bottom: 12,
+            left: (120 - carBodyWidth) / 2 - 2, // Align with carBody edge
+            bottom: 12, // Same level as carBody bottom edge
             child: Container(
-              width: 20,
-              height: 26,
+              width: 20, // Width of the trunk extending backward
+              height: carBodyHeight * 0.85, // Slightly lower than main body
               decoration: BoxDecoration(
                 color: Colors.amber.shade500,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   bottomLeft: Radius.circular(8),
+                  topRight: Radius.circular(5), // Slight curve towards body
+                  bottomRight: Radius.circular(3),
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
@@ -390,128 +451,147 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               ),
             ),
           ),
-          
-          // Taxi roof with company name (modified to be integrated with the body)
+
+          // Cabin Structure (Roof and Pillars area)
           Positioned(
-            top: 2,
+            // Position cabin on top of the main lower body
+            bottom: 12 + carBodyHeight - cabinTopOffset, 
+            left: (120 - cabinWidth) / 2, // Centered
             child: Container(
-              width: 70,
-              height: 24,
+              width: cabinWidth,
+              height: cabinHeight,
               decoration: BoxDecoration(
-                color: Colors.amber.shade500,
-                borderRadius: const BorderRadius.all(Radius.circular(12)),
+                color: Colors.amber.shade500, // Same as body or slightly different
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10),
+                  topRight: Radius.circular(10),
+                ),
+                 gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.amber.shade300,
+                    Colors.amber.shade600,
+                  ],
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.3),
                     blurRadius: 3,
-                    offset: const Offset(0, 1),
+                    offset: const Offset(0, -1), // Shadow upwards slightly for effect
                   ),
                 ],
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.amber.shade300,  // Light at top
-                    Colors.amber.shade600,  // Darker at bottom
-                  ],
-                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(2.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 1,
-                        spreadRadius: 0,
-                        offset: const Offset(0, 1),
+              // Child for the taxi sign, now inside the cabin structure for better layering
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 1.0), // Adjust sign position on cabin
+                  child: Container(
+                      width: cabinWidth * 0.8, // Sign width relative to cabin
+                      height: cabinHeight * 0.4, // Sign height
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 1, spreadRadius: 0,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'ISMAIL Taxi',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                        letterSpacing: 0.5,
+                      child: const Center(
+                        child: Text(
+                          'ISMAIL Taxi',
+                          style: TextStyle(
+                            fontSize: 8, // Adjusted size
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
                 ),
               ),
             ),
           ),
-          
-          // Door handles
+
+          // Front Windshield
           Positioned(
-            top: 22,
-            left: 35,
-            child: Container(
-              width: 6,
-              height: 2,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 170, 31, 31),
-                borderRadius: BorderRadius.circular(1),
-              ),
+            bottom: 12 + carBodyHeight - cabinTopOffset, // Base aligned with cabin bottom
+            right: (120 - cabinWidth) / 2 - windshieldWidth + cabinWidth -3, // Connects to cabin front-right
+            child: _buildGlassWindow(
+              width: windshieldWidth,
+              height: windshieldHeight,
+              clipper: FrontWindshieldClipper(),
             ),
           ),
           
+          // Rear Window
           Positioned(
-            top: 22,
-            right: 40,
-            child: Container(
-              width: 6,
-              height: 2,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 177, 78, 78),
-                borderRadius: BorderRadius.circular(1),
-              ),
+            bottom: 12 + carBodyHeight - cabinTopOffset + 1, // Base aligned with cabin bottom
+            left: (120 - cabinWidth) / 2 - rearWindowWidth + cabinWidth -3, // Connects to cabin front-left (this needs to be on the other side)
+             // Correction: Position from the left edge of the cabin for rear window
+            // left: (120 - cabinWidth) / 2, // Start at cabin's left edge
+            // child: Transform(
+            //   alignment: Alignment.center,
+            //   transform: Matrix4.rotationY(math.pi), // Flip if needed, or adjust clipper
+              child: _buildGlassWindow(
+                width: rearWindowWidth,
+                height: rearWindowHeight,
+                clipper: RearWindowClipper(), // Potentially a different clipper or transformed
+              // ),
             ),
           ),
-          
-          // Side mirrors
-          Positioned(
-            top: 20,
-            right: 15,
-            child: Container(
-              width: 3,
-              height: 6,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 221, 14, 14),
-                borderRadius: BorderRadius.circular(1),
-              ),
+          // Corrected Rear Window Position:
+           Positioned(
+            bottom: 12 + carBodyHeight - cabinTopOffset + 1,
+            left: (120 - cabinWidth) / 2, // Aligns with the left of the cabin structure
+            child: _buildGlassWindow(
+              width: rearWindowWidth,
+              height: rearWindowHeight,
+              clipper: RearWindowClipper(),
             ),
           ),
-          
+
+
+          // Side Windows (within the cabin structure)
+          // Positioned relative to the cabin container's coordinate space,
+          // or absolutely if cabin is just a visual backdrop.
+          // For simplicity, let's position them absolutely for now, aligned with the cabin.
           Positioned(
-            top: 20,
-            left: 15,
-            child: Container(
-              width: 3,
-              height: 6,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade800,
-                borderRadius: BorderRadius.circular(1),
-              ),
+            bottom: 12 + carBodyHeight - cabinTopOffset + 3, // Vertically centered in cabin
+            left: (120-cabinWidth)/2 + 22, // Adjust based on cabin width and desired pillar size
+            child: _buildGlassWindow(
+              width: cabinWidth * 0.22, // Width of side window
+              height: cabinHeight * 0.6, // Height of side window
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
-          
-          // Taxi sign on top with glowing effect
           Positioned(
-            top: -10,
+            bottom: 12 + carBodyHeight - cabinTopOffset + 3,
+            left: (120-cabinWidth)/2 + 4, // Second side window
+            child: _buildGlassWindow(
+              width: cabinWidth * 0.22,
+              height: cabinHeight * 0.6,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+
+
+          // Taxi sign on top (original position, adjust if needed with new cabin)
+          Positioned(
+            top: 0, // Adjust this based on new cabin height
             child: AnimatedBuilder(
               animation: _headlightController,
               builder: (context, child) {
                 return Container(
-                  width: 28,
+                  width: 70,
                   height: 14,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color.fromARGB(255, 221, 189, 9),
                     borderRadius: BorderRadius.circular(7),
                     border: Border.all(color: Colors.black87, width: 1.5),
                     boxShadow: [
@@ -524,7 +604,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
                   ),
                   child: const Center(
                     child: Text(
-                      'TAXI',
+                      'Ismeal TAXI',
                       style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.bold,
@@ -537,292 +617,206 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               },
             ),
           ),
-          
-          // License plate front
+
+          // // Windshield Wipers (simple lines)
+          // Positioned(
+          //   bottom: 12 + carBodyHeight - cabinTopOffset + windshieldHeight - 5, // On the windshield
+          //   right: (120 - cabinWidth) / 2 - windshieldWidth + cabinWidth - 3 + 5, // Approx center-right of windshield
+          //   child: Transform.rotate(
+          //     angle: -0.3, // Angle of wiper
+          //     child: Container(width: 10, height: 1.5, color: Colors.black54),
+          //   ),
+          // ),
+          // Positioned(
+          //   bottom: 12 + carBodyHeight - cabinTopOffset + windshieldHeight - 5,
+          //   right: (120 - cabinWidth) / 2 - windshieldWidth + cabinWidth - 3 + 12, // Second wiper
+          //   child: Transform.rotate(
+          //     angle: -0.35,
+          //     child: Container(width: 10, height: 1.5, color: Colors.black54),
+          //   ),
+          // ),
+
+
+          // Door handles (adjust Y position based on new body/cabin line)
           Positioned(
-            bottom: 6,
-            right: 2,
+            top: 28, // Approximate mid-point of the lower body, adjust as needed
+            left: 35,
             child: Container(
-              width: 12,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black, width: 0.5),
-              ),
-              child: const Center(
-                child: Text(
-                  'IS',
-                  style: TextStyle(
-                    fontSize: 3,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              width: 6, height: 2,
+              decoration: BoxDecoration(color: const Color.fromARGB(255, 100, 100, 100), borderRadius: BorderRadius.circular(1)),
+            ),
+          ),
+          Positioned(
+            top: 28,
+            right: 40,
+            child: Container(
+              width: 6, height: 2,
+              decoration: BoxDecoration(color: const Color.fromARGB(255, 100, 100, 100), borderRadius: BorderRadius.circular(1)),
             ),
           ),
           
-          // License plate rear
+          // Side mirrors
           Positioned(
-            bottom: 6,
-            left: 2,
+            top: 22, // Near top of cabin/door line
+            right: 15,
+            child: Container(width: 3, height: 6, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(1))),
+          ),
+          Positioned(
+            top: 22,
+            left: 15,
+            child: Container(width: 3, height: 6, decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(1))),
+          ),
+          
+          // License plate front & rear (original)
+          Positioned(
+            bottom: 6, right: 2,
             child: Container(
-              width: 12,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black, width: 0.5),
-              ),
-              child: const Center(
-                child: Text(
-                  'MAIL',
-                  style: TextStyle(
-                    fontSize: 3,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              width: 12, height: 5,
+              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.black, width: 0.5)),
+              child: const Center(child: Text('IS', style: TextStyle(fontSize: 3, fontWeight: FontWeight.bold))),
+            ),
+          ),
+          Positioned(
+            bottom: 6, left: 2,
+            child: Container(
+              width: 12, height: 5,
+              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.black, width: 0.5)),
+              child: const Center(child: Text('MAIL', style: TextStyle(fontSize: 3, fontWeight: FontWeight.bold))),
             ),
           ),
           
-          // Front bumper with more realistic shape
+          // Bumpers (original)
           Positioned(
-            bottom: 4,
-            right: 2,
+            bottom: 4, right: 2,
             child: Container(
-              width: 16,
-              height: 8,
+              width: 16, height: 8,
               decoration: BoxDecoration(
                 color: Colors.grey.shade800,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(4),
-                  bottomRight: Radius.circular(4),
-                  topLeft: Radius.circular(1),
-                  bottomLeft: Radius.circular(1),
-                ),
+                borderRadius: const BorderRadius.only(topRight: Radius.circular(4), bottomRight: Radius.circular(4), topLeft: Radius.circular(1), bottomLeft: Radius.circular(1)),
               ),
             ),
           ),
-          
-          // Rear bumper with more realistic shape
           Positioned(
-            bottom: 4,
-            left: 2,
+            bottom: 4, left: 2,
             child: Container(
-              width: 16,
-              height: 8,
+              width: 16, height: 8,
               decoration: BoxDecoration(
                 color: Colors.grey.shade800,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  bottomLeft: Radius.circular(4),
-                  topRight: Radius.circular(1),
-                  bottomRight: Radius.circular(1),
-                ),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), bottomLeft: Radius.circular(4), topRight: Radius.circular(1), bottomRight: Radius.circular(1)),
               ),
             ),
           ),
           
-          // Headlights with dynamic glow
-          Positioned(
-            bottom: 15,
+          // Headlights & Taillights (original, check positioning with new body if needed)
+           Positioned(
+            bottom: 15, // Adjusted to be on the lower body part
             right: 2,
             child: AnimatedBuilder(
               animation: _headlightController,
               builder: (context, child) {
-                return Stack(
+                // ... (original headlight code)
+                 return Stack(
                   children: [
-                    // Light beam effect
                     Positioned(
                       right: -5,
                       child: Container(
-                        width: 20,
-                        height: 10,
+                        width: 20, height: 10,
                         decoration: BoxDecoration(
                           gradient: RadialGradient(
-                            colors: [
-                              Colors.yellow.withOpacity(0.7 * _headlightController.value),
-                              Colors.transparent,
-                            ],
+                            colors: [Colors.yellow.withOpacity(0.7 * _headlightController.value), Colors.transparent],
                           ),
                         ),
                       ),
                     ),
-                    // Headlight itself
                     Container(
-                      width: 8,
-                      height: 8,
+                      width: 8, height: 8,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+                        color: Colors.white, shape: BoxShape.circle,
                         border: Border.all(color: Colors.grey.shade700, width: 1),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.yellow.withOpacity(0.5 * _headlightController.value),
-                            blurRadius: 8,
-                            spreadRadius: 2 * _headlightController.value,
-                          ),
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.yellow.withOpacity(0.5 * _headlightController.value), blurRadius: 8, spreadRadius: 2 * _headlightController.value)],
                       ),
-                      child: Center(
-                        child: Container(
-                          width: 4,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.yellow.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
+                      child: Center(child: Container(width: 4, height: 4, decoration: BoxDecoration(color: Colors.yellow.shade100, shape: BoxShape.circle))),
                     ),
                   ],
                 );
               },
             ),
           ),
-          
-          // Taillights with realistic brake effect
           Positioned(
-            bottom: 15,
+            bottom: 15, // Adjusted
             left: 2,
             child: AnimatedBuilder(
               animation: _taxiMovement,
               builder: (context, child) {
-                // Brakes light up more when the taxi slows down (changes direction)
+                // ... (original taillight code)
                 final braking = (_taxiMovement.value.abs() < 0.05) ? 1.0 : 0.5;
                 return Container(
-                  width: 7,
-                  height: 7,
+                  width: 7, height: 7,
                   decoration: BoxDecoration(
-                    color: Colors.red.shade700,
-                    shape: BoxShape.circle,
+                    color: Colors.red.shade700, shape: BoxShape.circle,
                     border: Border.all(color: Colors.grey.shade700, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.3 * braking),
-                        blurRadius: 5,
-                        spreadRadius: 1 * braking,
-                      ),
-                    ],
+                    boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.3 * braking), blurRadius: 5, spreadRadius: 1 * braking)],
                   ),
-                  child: Center(
-                    child: Container(
-                      width: 3,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade400,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
+                  child: Center(child: Container(width: 3, height: 3, decoration: BoxDecoration(color: Colors.red.shade400, shape: BoxShape.circle))),
                 );
               },
             ),
           ),
           
-          // Classic taxi checkerboard pattern
+          // Checkerboard pattern (Adjust Y position if body height changed significantly)
           Positioned(
-            bottom: 18,
-            child: Container(
-              width: 95,
+            bottom: 12 + carBodyHeight - 12, // On the lower body
+            child: SizedBox( // Changed to SizedBox for alignment
+              width: carBodyWidth,
               height: 6,
               child: Row(
                 children: List.generate(10, (index) {
-                  return Container(
-                    width: 9.5,
-                    height: 6,
-                    color: index % 2 == 0 ? Colors.black : Colors.amber.shade300,
+                  return Expanded( // Use Expanded for even distribution
+                    child: Container(
+                      height: 6,
+                      color: index % 2 == 0 ? Colors.black : Colors.amber.shade300,
+                    ),
                   );
                 }),
               ),
             ),
           ),
           
-          // Door lines - more detailed
+          // Door lines (Adjust Y and height based on new body/cabin)
           Positioned(
-            top: 10,
+            top: 26, // Adjusted
             left: 40,
-            child: Container(
-              width: 1.5,
-              height: 24,
-              color: Colors.black45,
-            ),
+            child: Container(width: 1.5, height: carBodyHeight * 0.7, color: Colors.black45),
           ),
-          
           Positioned(
-            top: 10,
+            top: 26, // Adjusted
             right: 42,
-            child: Container(
-              width: 1.5,
-              height: 24,
-              color: Colors.black45,
-            ),
+            child: Container(width: 1.5, height: carBodyHeight * 0.7, color: Colors.black45),
           ),
           
-          // Enhanced front wheel with better detail
+          // Wheels & Wheel arches (original, check Y position if overall car base moved)
+          Positioned(bottom: 0, right: 20, child: _buildDetailedWheel()),
+          Positioned(bottom: 0, left: 20, child: _buildDetailedWheel()),
           Positioned(
-            bottom: 0,
-            right: 20,
-            child: _buildDetailedWheel(),
+            bottom: 13, right: 20,
+            child: Container(width: 22, height: 6, decoration: BoxDecoration(color: const Color.fromARGB(255, 15, 15, 15), borderRadius: const BorderRadius.vertical(top: Radius.circular(12)))),
           ),
-          
-          // Enhanced back wheel with better detail
           Positioned(
-            bottom: 0,
-            left: 20,
-            child: _buildDetailedWheel(),
+            bottom: 13, left: 20,
+            child: Container(width: 22, height: 6, decoration: BoxDecoration(color: const Color.fromARGB(255, 15, 15, 15), borderRadius: const BorderRadius.vertical(top: Radius.circular(12)))),
           ),
-          
-          // Wheel arches for more depth
-          Positioned(
-            bottom: 13,
-            right: 20,
-            child: Container(
-              width: 22,
-              height: 6,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 15, 15, 15),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-            ),
-          ),
-          
-          Positioned(
-            bottom: 13,
-            left: 20,
-            child: Container(
-              width: 22,
-              height: 6,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 15, 15, 15),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-            ),
-          ),
-          
-          // Adding a decorative stripes on the top of the car
-          Positioned(
-            top: 8,
-            child: Container(
-              width: 65,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 0, 255, 0),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
+          // REMOVED: Decorative green stripe on the top of the car
         ],
       ),
     );
   }
-  
-  // More detailed wheel with realistic hubcap and tire texturing
+
   Widget _buildDetailedWheel() {
     return AnimatedBuilder(
       animation: _roadController,
       builder: (context, child) {
         return Transform.rotate(
-          angle: _roadController.value * 2 * math.pi * 2,
+          angle: _roadController.value * 2 * math.pi * 2, // Increased rotation speed for more visible spin
           child: Container(
             width: 18,
             height: 18,
@@ -842,59 +836,28 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Tire texture (small dots around the outer edge)
+                  // Tire texture
                   ...List.generate(8, (index) {
                     final angle = (index / 8) * 2 * math.pi;
                     return Positioned(
                       left: 7.5 + (math.cos(angle) * 7),
                       top: 7.5 + (sin(angle) * 7),
-                      child: Container(
-                        width: 1.5,
-                        height: 1.5,
-                        decoration: const BoxDecoration(
-                          color: Colors.grey,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
+                      child: Container(width: 1.5, height: 1.5, decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle)),
                     );
                   }),
                   // Hubcap
                   Container(
-                    width: 10,
-                    height: 10,
+                    width: 10, height: 10,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        const BoxShadow(
-                          color: Colors.black38,
-                          blurRadius: 1,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
+                      color: Colors.grey.shade300, shape: BoxShape.circle,
+                      boxShadow: [const BoxShadow(color: Colors.black38, blurRadius: 1, offset: Offset(0, 1))],
                     ),
-                    child: Center(
-                      child: Container(
-                        width: 4,
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: Colors.grey,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
+                    child: Center(child: Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle))),
                   ),
                   // Hubcap details - spokes
                   ...List.generate(4, (index) {
                     final angle = (index / 4) * 2 * math.pi;
-                    return Transform.rotate(
-                      angle: angle,
-                      child: Container(
-                        width: 1,
-                        height: 8,
-                        color: Colors.grey.shade700,
-                      ),
-                    );
+                    return Transform.rotate(angle: angle, child: Container(width: 1, height: 8, color: Colors.grey.shade700));
                   }),
                 ],
               ),
@@ -906,16 +869,16 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
   }
 }
 
-// Add these classes outside of your widget class for window shapes
-class WindshieldClipper extends CustomClipper<Path> {
+// NEW/MODIFIED Custom Clippers for Windows
+
+class FrontWindshieldClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    path.moveTo(0, size.height * 0.3);
-    path.lineTo(0, size.height);
-    path.lineTo(size.width, size.height);
-    path.lineTo(size.width, size.height * 0.3);
-    path.quadraticBezierTo(size.width / 2, 0, 0, size.height * 0.3);
+    path.moveTo(0, 0); // Top-left of windshield glass
+    path.lineTo(size.width, 0); // Top-right
+    path.lineTo(size.width * 0.85, size.height); // Bottom-right (slanted inwards)
+    path.lineTo(size.width * 0.15, size.height); // Bottom-left (slanted inwards)
     path.close();
     return path;
   }
@@ -924,15 +887,14 @@ class WindshieldClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
-class BackWindowClipper extends CustomClipper<Path> {
+class RearWindowClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    path.moveTo(0, size.height * 0.3);
-    path.lineTo(0, size.height);
-    path.lineTo(size.width, size.height);
-    path.lineTo(size.width, size.height * 0.3);
-    path.quadraticBezierTo(size.width / 2, 0, 0, size.height * 0.3);
+    path.moveTo(size.width * 0.15, 0); // Top-left (slanted inwards)
+    path.lineTo(size.width * 0.85, 0); // Top-right (slanted inwards)
+    path.lineTo(size.width, size.height); // Bottom-right
+    path.lineTo(0, size.height); // Bottom-left
     path.close();
     return path;
   }

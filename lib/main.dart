@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:taxi_auth_app/providers/auth_provider.dart';
 import 'package:taxi_auth_app/providers/map_provider.dart';
+import 'package:taxi_auth_app/providers/firestore_provider.dart';
 import 'package:taxi_auth_app/widgets/auth_wrapper.dart';
 
 void main() async {
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
+        ChangeNotifierProvider(create: (_) => FirestoreProvider()),
       ],
       child: MaterialApp(
         title: 'Ismail Taxi',
