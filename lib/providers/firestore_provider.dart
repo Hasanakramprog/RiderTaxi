@@ -164,11 +164,12 @@ class FirestoreProvider with ChangeNotifier {
       };
       
       // Add timestamps
+      // tripData['status'] = 'searching';
       tripData['createdAt'] = FieldValue.serverTimestamp();
       tripData['updatedAt'] = FieldValue.serverTimestamp();
       
-      // Add initial status
-      tripData['status'] = 'requested';
+      // // Add initial status
+      // tripData['status'] = 'requested';
       
       // Create the trip in Firestore
       final tripRef = await tripsCollection.add(tripData);
@@ -307,6 +308,62 @@ class FirestoreProvider with ChangeNotifier {
           });
     } catch (e) {
       print('Error rating driver: $e');
+    }
+  }
+  
+  // Create test drivers
+  Future<void> createTestDrivers() async {
+    try {
+      // Create 3 test drivers at different distances from a central point
+      List<Map<String, dynamic>> testDrivers = [
+        {
+          'displayName': 'Test Driver 1',
+          'isOnline': true,
+          'isAvailable': true,
+          'location': {
+            'latitude': 37.7749, // Base location
+            'longitude': -122.4194
+          },
+          'fcmToken': 'test-token-1',
+          'rating': 4.8,
+          'carDetails': {
+            'model': 'Toyota Camry',
+            'color': 'Black',
+            'plateNumber': 'TEST-123'
+          }
+        },
+        {
+          'displayName': 'Test Driver 2',
+          'isOnline': true,
+          'isAvailable': true,
+          'location': {
+            'latitude': 37.7849, // ~1km away
+            'longitude': -122.4294
+          },
+          'fcmToken': 'test-token-2',
+          'rating': 4.5
+        },
+        {
+          'displayName': 'Test Driver 3',
+          'isOnline': true,
+          'isAvailable': true,
+          'location': {
+            'latitude': 37.7649, // ~2km away
+            'longitude': -122.4094
+          },
+          'fcmToken': 'test-token-3',
+          'rating': 4.9
+        }
+      ];
+      
+      // Add drivers to Firestore
+      for (var driverData in testDrivers) {
+        await driversCollection.add(driverData);
+      }
+      
+      print('Test drivers created successfully');
+    } catch (e) {
+      print('Error creating test drivers: $e');
     }
   }
 }

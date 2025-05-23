@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - users can read/write only their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+    }
+    
+    // Drivers collection - drivers can read/write only their own document
+    match /drivers/{driverId} {
+      allow read, write: if request.auth != null && request.auth.uid == driverId;
+      // Allow users to read driver profiles (for trip info)
+      allow read: if request.auth != null;
+    }
+    
+    // Trips collection
+    match /trips/{tripId} {
+      // Users and drivers can read/write trips they're involved in
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         resource.data.driverId == request.auth.uid);
+      // Allow creation of new trips by authenticated users
+      allow create: if request.auth != null;
+    }
+    
+    // Payments collection
+    match /payments/{paymentId} {
+      // Users can read/create their payments
+      allow read, create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      // Allow drivers to read payments for their trips
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/trips/$(resource.data.tripId)) &&
+        get(/databases/$(database)/documents/trips/$(resource.data.tripId)).data.driverId == request.auth.uid;
+    }
+    
+    // Vehicles collection
+    match /vehicles/{vehicleId} {
+      // Drivers can CRUD their own vehicles
+      allow read, write: if request.auth != null && 
+        request.resource.data.driverId == request.auth.uid;
+      // Allow users to read vehicle data
+      allow read: if request.auth != null;
+    }
+  }
+}

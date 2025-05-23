@@ -6,6 +6,7 @@ import '../widgets/map_widget.dart';
 import '../widgets/location_input.dart';
 import '../models/location_model.dart';
 import 'trip_tracking_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
 
 class TripRequestScreen extends StatefulWidget {
   const TripRequestScreen({Key? key}) : super(key: key);
@@ -701,6 +702,16 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
                                   ),
                                 ),
                               ),
+                              ElevatedButton.icon(
+                                onPressed: _createTestDriversNearPickup,
+                                icon: const Icon(Icons.engineering),
+                                label: const Text('Create Test Drivers'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey[200],
+                                  foregroundColor: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                             ],
                           );
                         } else {
@@ -925,5 +936,135 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
         child: const Text('CONFIRM LOCATION'),
       ),
     );
+  }
+
+  Future<void> _createTestDriversNearPickup() async {
+    try {
+      final mapProvider = Provider.of<MapProvider>(context, listen: false);
+      
+      // Check if pickup location is set
+      if (mapProvider.pickupLocation == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please set a pickup location first')),
+        );
+        return;
+      }
+      
+      // Get pickup coordinates
+      final pickupLat = mapProvider.pickupLocation!.coordinates.latitude;
+      final pickupLng = mapProvider.pickupLocation!.coordinates.longitude;
+      
+      // Create a loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Creating test drivers near your pickup...'),
+            ],
+          ),
+        ),
+      );
+      
+      // Get Firestore instance
+      final firestore = FirebaseFirestore.instance;
+      
+      // Create a batch for multiple writes
+      final batch = firestore.batch();
+      
+      // Create 3 test drivers with small variations in location
+      // Driver 1 - Very close (about 100m)
+      final driver1Ref = firestore.collection('drivers').doc('test-driver-1');
+      batch.set(driver1Ref, {
+        'displayName': 'Test Driver 1',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': pickupLat + 0.001, // Approx 100m north
+          'longitude': pickupLng
+        },
+        'fcmToken': 'test-token-1',
+        'rating': 4.8,
+        'carDetails': {
+          'model': 'Toyota Camry',
+          'color': 'Black',
+          'plateNumber': 'TEST-123'
+        },
+        'lastUpdated': FieldValue.serverTimestamp()
+      });
+      
+      // Driver 2 - Nearby (about 300m)
+      final driver2Ref = firestore.collection('drivers').doc('test-driver-2');
+      batch.set(driver2Ref, {
+        'displayName': 'Test Driver 2',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': pickupLat,
+          'longitude': pickupLng + 0.003 // Approx 300m east
+        },
+        'fcmToken': 'test-token-2',
+        'rating': 4.5,
+        'carDetails': {
+          'model': 'Honda Accord',
+          'color': 'White',
+          'plateNumber': 'TEST-456'
+        },
+        'lastUpdated': FieldValue.serverTimestamp()
+      });
+      
+      // Driver 3 - Bit further (about 500m)
+      final driver3Ref = firestore.collection('drivers').doc('test-driver-3');
+      batch.set(driver3Ref, {
+        'displayName': 'Test Driver 3',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': pickupLat - 0.003, // Approx 300m south
+          'longitude': pickupLng - 0.002 // Approx 200m west
+        },
+        'fcmToken': 'test-token-3',
+        'rating': 4.9,
+        'carDetails': {
+          'model': 'Tesla Model 3',
+          'color': 'Red',
+          'plateNumber': 'TEST-789'
+        },
+        'lastUpdated': FieldValue.serverTimestamp()
+      });
+      
+      // Commit the batch
+      await batch.commit();
+      
+      // Close loading dialog
+      Navigator.of(context).pop();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('3 test drivers created near your pickup location'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+    } catch (e) {
+      // Close loading dialog if open
+      Navigator.of(context).pop();
+      
+      // Show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating test drivers: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

@@ -6,14 +6,19 @@ import 'package:taxi_auth_app/providers/map_provider.dart';
 import 'package:taxi_auth_app/providers/firestore_provider.dart';
 import 'package:taxi_auth_app/widgets/auth_wrapper.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  runApp(const MyApp());
+  // await EmulatorConfig.configureEmulators();
+  runApp(MyApp(navigatorKey: navigatorKey));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  const MyApp({Key? key, required this.navigatorKey}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +29,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FirestoreProvider()),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Ismail Taxi',
         theme: ThemeData(
           primarySwatch: Colors.amber,
