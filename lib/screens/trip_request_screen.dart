@@ -841,7 +841,7 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
         }).toList(),
         
         // Status and timestamps
-        'status': 'searching', // Initial status is searching for driver
+        // 'status': 'searching', // Initial status is searching for driver
         'searchStartedAt': DateTime.now().millisecondsSinceEpoch,
       };
       

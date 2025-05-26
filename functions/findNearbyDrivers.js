@@ -136,9 +136,13 @@ onDocumentCreated("trips/{tripId}", async (event) => {
 
     // Store a record of which driver was notified
     await db.collection("trips").doc(tripId).update({
+      // notifiedDriverId: closestDriver.driverId,
+      // notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      // lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      nearbyDrivers: nearbyDrivers,
       notifiedDriverId: closestDriver.driverId,
-      notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      notificationTime: admin.firestore.FieldValue.serverTimestamp(),
+      status: "driver_notified",
     });
 
     // Send push notification to driver

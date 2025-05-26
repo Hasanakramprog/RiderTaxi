@@ -164,7 +164,7 @@ class FirestoreProvider with ChangeNotifier {
       };
       
       // Add timestamps
-      // tripData['status'] = 'searching';
+      tripData['status'] = 'searching';
       tripData['createdAt'] = FieldValue.serverTimestamp();
       tripData['updatedAt'] = FieldValue.serverTimestamp();
       

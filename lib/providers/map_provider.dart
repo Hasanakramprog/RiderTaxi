@@ -8,15 +8,24 @@ import '../models/location_model.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-class MapProvider with ChangeNotifier {
+class MapProvider extends ChangeNotifier {
+  // Default initial camera position
+  final CameraPosition _initialCameraPosition = const CameraPosition(
+    target: LatLng(37.42796133580664, -122.085749655962),
+    zoom: 14.0,
+  );
+
+  CameraPosition get initialCameraPosition => _initialCameraPosition;
+
   GoogleMapController? _mapController;
   LocationModel? _pickupLocation;
   LocationModel? _dropoffLocation;
   LatLng _currentUserLocation = const LatLng(0, 0);
   bool _hasInitializedLocation = false;
   bool _isLoading = false;
-  Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {};
+  final Set<Marker> _markers = {};
+  final Set<Marker> _tripMarkers = {};
+  final Set<Polyline> _polylines = {};
   double _estimatedFare = 0.0;
   String _currentUserAddress = "";
 
@@ -28,7 +37,22 @@ class MapProvider with ChangeNotifier {
   int? _estimatedDuration;
 
   // Getters
-  Set<Marker> get markers => _markers;
+  Set<Marker> get markers {
+    final result = <Marker>{};
+
+    // Add existing markers
+    result.addAll(_markers);
+
+    // Add trip markers
+    result.addAll(_tripMarkers);
+
+    // Add driver marker if available
+    // if (_driverMarker != null) {
+    //   result.add(_driverMarker!);
+    // }
+
+    return result;
+  }
   Set<Polyline> get polylines => _polylines;
   GoogleMapController? get mapController => _mapController;
   LocationModel? get pickupLocation => _pickupLocation;
@@ -430,7 +454,7 @@ class MapProvider with ChangeNotifier {
 
   // Update markers based on current locations
   void _updateMarkers() {
-    _markers = {};
+    _markers.clear();
 
     // Add pickup marker if exists
     if (_pickupLocation != null) {
@@ -474,7 +498,7 @@ class MapProvider with ChangeNotifier {
 
   // Update route between all points (pickup -> stops -> dropoff)
   Future<void> _updateRoute() async {
-    _polylines = {};
+    _polylines.clear();
     _estimatedFare = 0.0;
 
     // Need at least pickup and dropoff to calculate a route
@@ -712,6 +736,76 @@ class MapProvider with ChangeNotifier {
     }
     
     return additionalCharge;
+  }
+
+  // Animate camera to bounds
+  void animateToLatLngBounds(LatLngBounds bounds, double padding) {
+    if (_mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, padding));
+    }
+  }
+
+  // Add/update the driver marker to the markers set
+  void updateDriverLocation(Marker driverMarker) {
+    _markers.removeWhere((marker) => marker.markerId.value == 'driver');
+    _markers.add(driverMarker);
+    notifyListeners();
+  }
+  
+  // Remove driver marker from the markers set
+  void removeDriverLocation() {
+    _markers.removeWhere((marker) => marker.markerId.value == 'driver');
+    // notifyListeners();
+  }
+
+  // Add methods to manage trip markers and polylines
+  void addTripMarker(Marker marker) {
+    _tripMarkers.removeWhere((m) => m.markerId == marker.markerId);
+    _tripMarkers.add(marker);
+    notifyListeners();
+  }
+  
+  void clearTripMarkers() {
+    _tripMarkers.clear();
+    notifyListeners();
+  }
+  
+  void setPolyline(Polyline polyline) {
+    _polylines.clear();
+    _polylines.add(polyline);
+    notifyListeners();
+  }
+  
+  void clearPolylines() {
+    _polylines.clear();
+    notifyListeners();
+  }
+
+  // Add this method to your MapProvider class
+  void clearAllMapResources() {
+    // Clear all markers
+    _markers.clear();
+    _tripMarkers.clear();
+    // _driverMarker = null;
+    
+    // Clear all polylines
+    _polylines.clear();
+    
+    // Reset any active selections or routes
+    // _selectedPickupLocation = null;
+    // _selectedDropoffLocation = null;
+    // _routeInfo = null;
+    
+    // Notify listeners about these changes
+    // notifyListeners();
+  }
+
+  // Add to MapProvider class
+  void disposeMapController() {
+    if (_mapController != null) {
+      _mapController!.dispose();
+      _mapController = null;
+    }
   }
 }
 
