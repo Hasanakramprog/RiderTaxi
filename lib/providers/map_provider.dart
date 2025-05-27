@@ -28,7 +28,9 @@ class MapProvider extends ChangeNotifier {
   final Set<Polyline> _polylines = {};
   double _estimatedFare = 0.0;
   String _currentUserAddress = "";
-
+    // Add this property near other class properties
+  bool _hasCustomPickupLocation = false;
+  bool get hasCustomPickupLocation => _hasCustomPickupLocation;
   // Add storage for stops with wait time
   List<Map<String, dynamic>> _stops = [];
 
@@ -120,22 +122,28 @@ class MapProvider extends ChangeNotifier {
       // Update flag
       _hasInitializedLocation = true;
 
-      // Automatically set current location as pickup point
+     if (!_hasCustomPickupLocation && (_pickupLocation == null || !_hasInitializedLocation)) {
       _pickupLocation = LocationModel(
         placeId: 'current_location',
         address: _currentUserAddress,
         coordinates: _currentUserLocation,
         name: 'Current Location',
       );
+    }
 
       // Update markers and route
       _updateMarkers();
 
       // Move camera to user location if controller exists
-      if (_mapController != null) {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(_currentUserLocation, 15),
-        );
+    if (_mapController != null) {
+      // If we have a custom pickup location, use that
+      LatLng cameraTarget = _hasCustomPickupLocation && _pickupLocation != null
+          ? _pickupLocation!.coordinates
+          : _currentUserLocation;
+      
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(cameraTarget, 15),
+      );
 
         // Only update route if dropoff is also set
         if (_dropoffLocation != null) {
@@ -240,6 +248,7 @@ class MapProvider extends ChangeNotifier {
 
     try {
       _pickupLocation = location;
+    _hasCustomPickupLocation = true;
       _updateMarkers();
 
       // Move camera to the selected location
@@ -336,11 +345,15 @@ class MapProvider extends ChangeNotifier {
   // Clear pickup location
   void clearPickupLocation() {
     _pickupLocation = null;
+     _hasCustomPickupLocation = false;
     _updateMarkers();
     _updateRoute();
     notifyListeners();
   }
-
+  // Add this method to reset the custom pickup flag
+void clearCustomPickupFlag() {
+  _hasCustomPickupLocation = false;
+}
   // Clear dropoff location
   void clearDropoffLocation() {
     _dropoffLocation = null;
@@ -365,6 +378,8 @@ class MapProvider extends ChangeNotifier {
         coordinates: latLng,
         name: 'Selected Pickup',
       );
+       // Set custom pickup flag
+    _hasCustomPickupLocation = true;
 
       _updateMarkers();
       _updateRoute();
