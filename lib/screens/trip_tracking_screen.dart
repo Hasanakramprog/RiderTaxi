@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/firestore_provider.dart';
+import '../providers/map_provider.dart'; // Import the map provider
 import '../widgets/map_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
@@ -15,9 +16,14 @@ class TripTrackingScreen extends StatefulWidget {
 }
 
 class _TripTrackingScreenState extends State<TripTrackingScreen> {
-  Map<String, dynamic>? _tripData;
-  String? _tripStatus;
+  // Add these variables to your state class
   StreamSubscription<DocumentSnapshot>? _tripSubscription;
+  Timer? _refreshTimer;
+  Timestamp? _lastUpdateTimestamp;
+  Map<String, dynamic>? _tripData;
+  String _tripStatus = 'searching';
+
+  // Existing variables...
   String? _statusMessage;
   bool _isWaitingForDriver = false;
   bool _isDriverOnTheWay = false;
@@ -35,65 +41,135 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
   // Add this constant at the class level for consistency
   static const int DRIVER_TIMEOUT_SECONDS = 30;
 
+  // Add these variables to your _TripTrackingScreenState class
+  Timer? _searchingTimer;
+  int _searchingCount = 0;
+
   @override
   void initState() {
     super.initState();
     // Listen for trip status changes
     _setupTripListener();
+    
+    // Set up a periodic refresh every 3 seconds for critical statuses
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _manualRefreshTripStatus();
+    });
   }
-
+ Future<void> _manualRefreshTripStatus() async {
+    try {
+      // Only refresh if we're in an active trip state
+      if (_tripStatus == 'driver_accepted' || 
+          _tripStatus == 'driver_arrived' || 
+          _tripStatus == 'in_progress') {
+        
+        // Get latest data directly with cache disabled
+        final snapshot = await FirebaseFirestore.instance
+            .collection('trips')
+            .doc(widget.tripId)
+            .get(const GetOptions(source: Source.server));
+        
+        if (snapshot.exists) {
+          final tripData = snapshot.data()!;
+          final status = tripData['status'] as String?;
+          final lastUpdated = tripData['updatedAt'] as Timestamp?;
+          
+          // Only process if it's newer than what we have
+          if (lastUpdated != null && 
+              (_lastUpdateTimestamp == null || 
+               lastUpdated.compareTo(_lastUpdateTimestamp!) > 0)) {
+            
+            // If status has changed, update UI
+            if (status != null && status != _tripStatus) {
+              setState(() {
+                _tripStatus = status;
+                _tripData = tripData;
+                _lastUpdateTimestamp = lastUpdated;
+              });
+              
+              // Handle different status updates
+              switch (status) {
+                case 'driver_accepted':
+                  _handleDriverAccepted(tripData);
+                  break;
+                case 'driver_arrived':
+                  _handleDriverArrived(tripData);
+                  break;
+                case 'in_progress':
+                  _handleTripInProgress(tripData);
+                  break;
+                case 'completed':
+                  _handleTripCompleted(tripData);
+                  break;
+                // Add other cases as needed
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error manually refreshing trip status: $e');
+    }
+  }
   void _setupTripListener() {
     _tripSubscription = FirebaseFirestore.instance
         .collection('trips')
         .doc(widget.tripId)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .listen((snapshot) {
-      if (!snapshot.exists) {
-        // Handle deleted trip
-        return;
-      }
-      
-      final tripData = snapshot.data()!;
-      final status = tripData['status'] as String?;
-      
-      // Update UI based on status changes
-      setState(() {
-        _tripStatus = status ?? 'unknown';
-        _tripData = tripData;
-      });
-      
-      // Handle different status updates
-      switch (status) {
-        case 'driver_notified':
-          _handleDriverNotified(tripData);
-          break;
-        case 'driver_accepted':
-          _handleDriverAccepted(tripData);
-          break;
-        case 'driver_arrived':
-          _handleDriverArrived(tripData);
-          break;
-        case 'in_progress':
-          _handleTripInProgress(tripData);
-          break;
-        case 'completed':
-          _handleTripCompleted(tripData);
-          break;
-        case 'cancelled':
-          _handleTripCancelled(tripData);
-          break;
-        case 'no_drivers_available':
-          _handleNoDriversAvailable();
-          break;
-      }
-    });
+          // Only process if data is fresh from server
+          if (snapshot.metadata.hasPendingWrites == false && 
+              snapshot.metadata.isFromCache == false) {
+            if (!snapshot.exists) {
+              // Handle deleted trip
+              return;
+            }
+          
+            final tripData = snapshot.data()!;
+            final status = tripData['status'] as String?;
+            final lastUpdated = tripData['updatedAt'] as Timestamp?;
+            
+            // Update UI based on status changes
+            setState(() {
+              _tripStatus = status ?? 'unknown';
+              _tripData = tripData;
+              _lastUpdateTimestamp = lastUpdated;
+            });
+            
+            // Handle different status updates
+            switch (status) {
+              case 'driver_notified':
+                _handleDriverNotified(tripData);
+                break;
+              case 'driver_accepted':
+                _handleDriverAccepted(tripData);
+                break;
+              case 'driver_arrived':
+                _handleDriverArrived(tripData);
+                break;
+              case 'in_progress':
+                _handleTripInProgress(tripData);
+                break;
+              case 'completed':
+                _handleTripCompleted(tripData);
+                break;
+              case 'cancelled':
+                _handleTripCancelled(tripData);
+                break;
+              case 'no_drivers_available':
+                _handleNoDriversAvailable();
+                break;
+            }
+          }
+        });
   }
 
   @override
   void dispose() {
-    _progressUpdateTimer?.cancel();
+    _refreshTimer?.cancel();
     _tripSubscription?.cancel();
     _cancelDriverResponseTimer();
+    _searchingTimer?.cancel(); // Add this line
     super.dispose();
   }
 
@@ -104,10 +180,30 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
         title: Text(_getTitleForStatus()),
         backgroundColor: _getColorForStatus(),
         actions: [
+          // Add a small refresh indicator in the app bar
+          if (_tripStatus == 'driver_accepted' || 
+              _tripStatus == 'driver_arrived' || 
+              _tripStatus == 'in_progress')
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    _getColorForStatus() == Colors.amber
+                        ? Colors.black54
+                        : Colors.white70,
+                  ),
+                ),
+              ),
+            ),
+          // Your existing actions
           if (_shouldShowCancelButton())
             IconButton(
               icon: const Icon(Icons.cancel),
-              onPressed: _cancelTrip,
+              onPressed: _showCancelTripDialog,
               tooltip: 'Cancel Trip',
             ),
         ],
@@ -187,27 +283,51 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
   }
 
   Widget _buildStatusPanel() {
-    switch (_tripStatus) {
-      case 'searching':
-        return _buildSearchingPanel();
-      case 'driver_notified':
-        return _buildDriverNotifiedPanel();
-      case 'driver_accepted':
-        return _buildDriverAcceptedPanel();
-      case 'driver_arrived':
-        return _buildDriverArrivedPanel();
-      case 'in_progress':
-        return _buildInProgressPanel();
-      case 'completed':
-        return _buildCompletedPanel();
-      case 'cancelled':
-        return _buildCancelledPanel();
-      case 'no_drivers_available':
-        return _buildNoDriversPanel();
-      default:
-        return const Center(child: Text('Loading trip information...'));
-    }
+  // Get the map provider to check loading status
+  final mapProvider = Provider.of<MapProvider>(context, listen: true);
+  
+  // First check for specific trip statuses that should override the loading state
+  if (_tripStatus == 'searching') {
+    return _buildSearchingPanel();
   }
+  
+  // Then check if map is loading with no specific status
+  if (mapProvider.isLoading) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(color: Colors.amber),
+          const SizedBox(height: 16),
+          Text(
+            'Updating map location...',
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Continue with other status panels based on trip status
+  switch (_tripStatus) {
+    case 'driver_notified':
+      return _buildDriverNotifiedPanel();
+    case 'driver_accepted':
+      return _buildDriverAcceptedPanel();
+    case 'driver_arrived':
+      return _buildDriverArrivedPanel();
+    case 'in_progress':
+      return _buildInProgressPanel();
+    case 'completed':
+      return _buildCompletedPanel();
+    case 'cancelled':
+      return _buildCancelledPanel();
+    case 'no_drivers_available':
+      return _buildNoDriversPanel();
+    default:
+      return const Center(child: Text('Loading trip information...'));
+  }
+}
 
   void _showCancelTripDialog() {
     showDialog(
@@ -968,6 +1088,11 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
   }
 
   Widget _buildSearchingPanel() {
+    // Start the driver search timer if it's not already running
+    if (_searchingTimer == null) {
+      _startPeriodicDriverSearch();
+    }
+    
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -982,7 +1107,9 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'We are searching for available drivers in your area.',
+            _searchingCount > 3 
+                ? 'Taking longer than usual to find drivers...'
+                : 'We are searching for available drivers in your area.',
             style: TextStyle(color: Colors.grey[700]),
             textAlign: TextAlign.center,
           ),
@@ -999,6 +1126,73 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
         ],
       ),
     );
+  }
+
+  // Add this method to start periodic driver search
+  void _startPeriodicDriverSearch() {
+    _searchingCount = 0;
+    
+    // Cancel any existing timer
+    _searchingTimer?.cancel();
+    
+    // First immediate search
+    _triggerDriverSearch();
+    
+    // Then set up periodic search every 10 seconds
+    _searchingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (!mounted || _tripStatus != 'searching') {
+        timer.cancel();
+        _searchingTimer = null;
+        return;
+      }
+      
+      _searchingCount++;
+      _triggerDriverSearch();
+      
+      // If we've been searching for a long time (e.g., 2 minutes), 
+      // consider showing a timeout message or handling differently
+      if (_searchingCount > 12) {  // 12 x 10 seconds = 2 minutes
+        _checkForSearchTimeout();
+      }
+    });
+  }
+
+  // Add this method to trigger the cloud function search
+  Future<void> _triggerDriverSearch() async {
+    try {
+      // Trigger the cloud function by updating the trip document with a fresh timestamp
+      await FirebaseFirestore.instance
+          .collection('trips')
+          .doc(widget.tripId)
+          .update({
+            'searchRefreshedAt': FieldValue.serverTimestamp(),
+            'searchAttempts': FieldValue.increment(1)
+          });
+          
+      print('Triggered driver search (attempt $_searchingCount)');
+    } catch (e) {
+      print('Error triggering driver search: $e');
+    }
+  }
+
+  // Add method to handle search timeout
+  void _checkForSearchTimeout() async {
+    // If we've been searching for too long with no results,
+    // update to no_drivers_available status
+    if (_tripStatus == 'searching') {
+      try {
+        await FirebaseFirestore.instance
+            .collection('trips')
+            .doc(widget.tripId)
+            .update({
+              'status': 'no_drivers_available',
+              'noDriversAvailable': true,
+              'searchEndedAt': FieldValue.serverTimestamp()
+            });
+      } catch (e) {
+        print('Error updating trip status to no_drivers_available: $e');
+      }
+    }
   }
 
   Widget _buildDriverNotifiedPanel() {
@@ -1217,22 +1411,22 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update({
-                'status': 'in_progress',
-                'startTime': FieldValue.serverTimestamp(),
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-            ),
-            child: const Text(
-              'START TRIP',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
+          // ElevatedButton(
+          //   onPressed: () {
+          //     FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update({
+          //       'status': 'in_progress',
+          //       'startTime': FieldValue.serverTimestamp(),
+          //     });
+          //   },
+          //   style: ElevatedButton.styleFrom(
+          //     backgroundColor: Colors.green,
+          //     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+          //   ),
+          //   child: const Text(
+          //     'START TRIP',
+          //     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          //   ),
+          // ),
         ],
       ),
     ),

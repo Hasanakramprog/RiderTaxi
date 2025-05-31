@@ -331,29 +331,109 @@ void _clearMapResources(MapProvider? mapProvider) {
   Widget build(BuildContext context) {
     return Consumer<MapProvider>(
       builder: (context, mapProvider, _) {
-        return GoogleMap(
-          initialCameraPosition: mapProvider.initialCameraPosition,
-          onMapCreated:(GoogleMapController controller) {
+        // Show loading indicator while location is being initialized
+        if (mapProvider.isInitializing) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  color: Colors.amber,
+                ),
+                SizedBox(height: 16),
+                Text('Loading location...'),
+              ],
+            ),
+          );
+        }
+        
+        // Show overlay loading indicator for other loading operations
+        return Stack(
+          children: [
+            // The map
+            GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: mapProvider.pickupLocation?.coordinates ?? 
+                      mapProvider.currentUserLocation,
+                zoom: 14.0,
+              ),
+              onMapCreated: (GoogleMapController controller) {
                 mapProvider.setMapController(controller);
               },
-          markers: mapProvider.markers,
-          polylines: mapProvider.polylines.union(_polylines), // Include local polylines
-          myLocationEnabled: true,
-          myLocationButtonEnabled: true,
-          zoomControlsEnabled: true,
-          mapToolbarEnabled: false,
-          compassEnabled: true,
-          onTap: widget.allowMapTaps ? (LatLng position) {
-            // Handle map taps differently based on selection mode
-            if (widget.isPickupSelection) {
-              mapProvider.setPickupLocationFromMap(position);
-            } else if (widget.stopIndex >= 0) {
-              // Use the MapProvider's method to set stop location
-              mapProvider.setStopLocationFromMap(position, widget.stopIndex);
-            } else {
-              mapProvider.setDropoffLocationFromMap(position);
-            }
-          } : null,
+              markers: mapProvider.markers,
+              polylines: mapProvider.polylines.union(_polylines),
+              myLocationEnabled: true, 
+              myLocationButtonEnabled: false, // Set to false to use custom button
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+              compassEnabled: true,
+              onTap: widget.allowMapTaps ? (LatLng position) {
+                // Handle map taps differently based on selection mode
+                if (widget.isPickupSelection) {
+                  mapProvider.setPickupLocationFromMap(position);
+                } else if (widget.stopIndex >= 0) {
+                  mapProvider.setStopLocationFromMap(position, widget.stopIndex);
+                } else {
+                  mapProvider.setDropoffLocationFromMap(position);
+                }
+              } : null,
+            ),
+            
+            // Custom current location button with loading indicator
+            // Positioned(
+            //   right: 10,
+            //   bottom: 10, // Position above the zoom controls
+            //   child: FloatingActionButton(
+            //     mini: true,
+            //     backgroundColor: const Color.fromARGB(255, 255, 193, 0),
+            //     onPressed: mapProvider.isLoading 
+            //         ? null // Disable when loading
+            //         : () => mapProvider.moveToCurrentLocation(),
+            //     child: mapProvider.isLoading
+            //         ? const SizedBox(
+            //             height: 5,
+            //             width: 5,
+            //             child: CircularProgressIndicator(
+            //               color: Colors.amber,
+            //               strokeWidth: 2,
+            //             ),
+            //           )
+            //         : const Icon(
+            //             Icons.my_location,
+            //             color: Colors.blue,
+            //           ),
+            //   ),
+            // ),
+            
+            // Overlay loading indicator for other operations
+            if (mapProvider.isLoading && !mapProvider.isInitializing)
+              const Positioned(
+                right: 0,
+                bottom: 40,
+                child: Card(
+                  color: Colors.white,
+                  elevation: 4,
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.amber,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text("Updating location...", style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

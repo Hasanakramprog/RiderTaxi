@@ -1,4 +1,5 @@
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+// eslint-disable-next-line max-len
+const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
 // Initialize admin if not already initialized
@@ -46,14 +47,11 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c; // Distance in km
 }
 
-// Export the function using v2 syntax
-exports.findNearbyDrivers =
-onDocumentCreated("trips/{tripId}", async (event) => {
+// Helper function to find nearby drivers
+// eslint-disable-next-line require-jsdoc
+async function findDriversForTrip(tripId, tripData) {
   try {
-    const tripId = event.params.tripId;
-    const tripData = event.data.data();
-
-    logDebug("New trip created", {tripId, tripData});
+    logDebug("Processing trip", {tripId, tripStatus: tripData.status});
 
     // Only process trips with 'searching' status
     if (tripData.status !== "searching") {
@@ -136,9 +134,6 @@ onDocumentCreated("trips/{tripId}", async (event) => {
 
     // Store a record of which driver was notified
     await db.collection("trips").doc(tripId).update({
-      // notifiedDriverId: closestDriver.driverId,
-      // notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-      // lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       nearbyDrivers: nearbyDrivers,
       notifiedDriverId: closestDriver.driverId,
       notificationTime: admin.firestore.FieldValue.serverTimestamp(),
@@ -152,8 +147,7 @@ onDocumentCreated("trips/{tripId}", async (event) => {
         notification: {
           title: "New Trip Request",
           body:
-          `New pickup
-           request (${closestDriver.distance.toFixed(1)}km away)`,
+          `New pickup request (${closestDriver.distance.toFixed(1)}km away)`,
         },
         data: {
           tripId: tripId,
@@ -172,8 +166,7 @@ onDocumentCreated("trips/{tripId}", async (event) => {
 
       try {
         await fcm.send(message);
-        console.log(`Notification sent to driver
-             ${closestDriver.driverId}`);
+        console.log(`Notification sent to driver ${closestDriver.driverId}`);
       } catch (error) {
         console.error("Error sending notification:", error);
       }
@@ -181,7 +174,52 @@ onDocumentCreated("trips/{tripId}", async (event) => {
 
     return null;
   } catch (error) {
-    console.error("Error in findNearbyDrivers function:", error);
+    console.error("Error in findDriversForTrip function:", error);
+    return null;
+  }
+}
+
+// Handle trip creation
+// eslint-disable-next-line max-len
+exports.findNearbyDrivers = onDocumentCreated("trips/{tripId}", async (event) => {
+  try {
+    const tripId = event.params.tripId;
+    const tripData = event.data.data();
+
+    logDebug("New trip created", {tripId, tripData});
+
+    return findDriversForTrip(tripId, tripData);
+  } catch (error) {
+    console.error("Error in findNearbyDrivers onCreate function:", error);
+    return null;
+  }
+});
+
+// Handle trip updates (for periodic searches)
+// eslint-disable-next-line max-len
+exports.refreshNearbyDriversSearch = onDocumentUpdated("trips/{tripId}", async (event) => {
+  try {
+    const tripId = event.params.tripId;
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
+    // Only trigger on searchRefreshedAt updates for searching trips
+    if (afterData.status !== "searching") {
+      return null;
+    }
+    // Check if searchRefreshedAt was updated
+    if (!afterData.searchRefreshedAt) {
+      return null;
+    }
+    // If searchRefreshedAt existed before, make sure it changed
+    // eslint-disable-next-line max-len
+    if (beforeData.searchRefreshedAt && afterData.searchRefreshedAt.seconds === beforeData.searchRefreshedAt.seconds) {
+      return null;
+    }
+    // eslint-disable-next-line max-len
+    logDebug("Refreshing driver search", {tripId, searchAttempts: afterData.searchAttempts || 0});
+    return findDriversForTrip(tripId, afterData);
+  } catch (error) {
+    console.error("Error in refreshNearbyDriversSearch function:", error);
     return null;
   }
 });

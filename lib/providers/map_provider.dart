@@ -11,7 +11,7 @@ import 'dart:convert';
 class MapProvider extends ChangeNotifier {
   // Default initial camera position
   final CameraPosition _initialCameraPosition = const CameraPosition(
-    target: LatLng(37.42796133580664, -122.085749655962),
+    target: LatLng(33.8938, 35.5018), // Beirut, Lebanon coordinates
     zoom: 14.0,
   );
 
@@ -37,6 +37,10 @@ class MapProvider extends ChangeNotifier {
   // Add these private variables
   double? _estimatedDistance;
   int? _estimatedDuration;
+
+  // Add a new field to track initialization status
+  bool _isInitializing = true;
+  bool get isInitializing => _isInitializing;
 
   // Getters
   Set<Marker> get markers {
@@ -81,6 +85,7 @@ class MapProvider extends ChangeNotifier {
 
   // Initialize user location
   Future<void> initializeUserLocation() async {
+    _isInitializing = true;
     _isLoading = true;
     notifyListeners();
 
@@ -88,15 +93,14 @@ class MapProvider extends ChangeNotifier {
       Location location = Location();
       bool serviceEnabled;
       PermissionStatus permissionGranted;
-      LocationData locationData;
 
       // Check if location service is enabled
       serviceEnabled = await location.serviceEnabled();
       if (!serviceEnabled) {
         serviceEnabled = await location.requestService();
         if (!serviceEnabled) {
-          _isLoading = false;
-          notifyListeners();
+          // If service is not available, use default location
+          await setDefaultLocation();
           return;
         }
       }
@@ -106,36 +110,97 @@ class MapProvider extends ChangeNotifier {
       if (permissionGranted == PermissionStatus.denied) {
         permissionGranted = await location.requestPermission();
         if (permissionGranted != PermissionStatus.granted) {
-          _isLoading = false;
-          notifyListeners();
+          // If permission is denied, use default location
+          await setDefaultLocation();
           return;
         }
       }
 
-      // Get current location
-      locationData = await location.getLocation();
-      _currentUserLocation = LatLng(locationData.latitude!, locationData.longitude!);
+      try {
+        // Attempt to get current location with a timeout
+        LocationData locationData = await location.getLocation()
+            .timeout(const Duration(seconds: 10));
+        
+        _currentUserLocation = LatLng(
+          locationData.latitude!, 
+          locationData.longitude!
+        );
 
-      // Get address from coordinates
-      await _getAddressFromCoordinates(_currentUserLocation);
+        // Get address from coordinates
+        _currentUserAddress = await _getAddressFromCoordinates(_currentUserLocation);
+        
+        // Update flag
+        _hasInitializedLocation = true;
 
-      // Update flag
-      _hasInitializedLocation = true;
+        // Only set current location as pickup if no custom location
+        if (!_hasCustomPickupLocation && _pickupLocation == null) {
+          _pickupLocation = LocationModel(
+            placeId: 'current_location',
+            address: _currentUserAddress,
+            coordinates: _currentUserLocation,
+            name: 'Current Location',
+          );
+        }
 
-     if (!_hasCustomPickupLocation && (_pickupLocation == null || !_hasInitializedLocation)) {
+        // Update markers and route
+        _updateMarkers();
+
+        if (_dropoffLocation != null) {
+          _updateRoute();
+        }
+      } catch (e) {
+        print('Error getting current location: $e');
+        await setDefaultLocation();
+        return;
+      }
+    } catch (e) {
+      print('Error initializing user location: $e');
+      await setDefaultLocation();
+    } finally {
+      _isInitializing = false;
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  // Update setDefaultLocation method
+Future<void> setDefaultLocation() async {
+  try {
+    // Set default location to Beirut, Lebanon
+    _currentUserLocation = const LatLng(33.8938, 35.5018);
+    _currentUserAddress = "Beirut, Lebanon";
+    
+    // Update the flag
+    _hasInitializedLocation = true;
+
+    // Only set Beirut as pickup if no custom location is set
+    if (!_hasCustomPickupLocation && _pickupLocation == null) {
       _pickupLocation = LocationModel(
-        placeId: 'current_location',
+        placeId: 'default_location',
         address: _currentUserAddress,
         coordinates: _currentUserLocation,
-        name: 'Current Location',
+        name: 'Beirut',
       );
     }
 
-      // Update markers and route
-      _updateMarkers();
-
-      // Move camera to user location if controller exists
-    if (_mapController != null) {
+    _updateMarkers();
+    
+    if (_dropoffLocation != null) {
+      _updateRoute();
+    }
+  } catch (e) {
+    print('Error setting default location: $e');
+  } finally {
+    _isInitializing = false;
+    _isLoading = false;
+    notifyListeners();
+  }
+}
+  // Set map controller
+  void setMapController(GoogleMapController controller) {
+    _mapController = controller;
+    
+    // Only move camera if we have initialized location and controller
+    if (_hasInitializedLocation && !_isInitializing) {
       // If we have a custom pickup location, use that
       LatLng cameraTarget = _hasCustomPickupLocation && _pickupLocation != null
           ? _pickupLocation!.coordinates
@@ -143,28 +208,6 @@ class MapProvider extends ChangeNotifier {
       
       _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(cameraTarget, 15),
-      );
-
-        // Only update route if dropoff is also set
-        if (_dropoffLocation != null) {
-          _updateRoute();
-        }
-      }
-    } catch (e) {
-      print('Error initializing user location: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // Set map controller
-  void setMapController(GoogleMapController controller) {
-    _mapController = controller;
-
-    if (_hasInitializedLocation) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentUserLocation, 15),
       );
     }
   }
@@ -822,6 +865,48 @@ void clearCustomPickupFlag() {
       _mapController = null;
     }
   }
+
+  // Add this method to handle current location button clicks
+Future<void> moveToCurrentLocation() async {
+  // Set loading state
+  _isLoading = true;
+  notifyListeners();
+
+  try {
+    // Try to get fresh location data
+    Location location = Location();
+    LocationData? locationData;
+    
+    try {
+      // Try to get current location with timeout
+      locationData = await location.getLocation().timeout(const Duration(seconds: 10));
+      
+      // Update current location
+      _currentUserLocation = LatLng(
+        locationData.latitude!, 
+        locationData.longitude!
+      );
+
+      // Get address from coordinates
+      _currentUserAddress = await _getAddressFromCoordinates(_currentUserLocation);
+    } catch (e) {
+      print('Error getting current location: $e');
+      // Continue with existing location data if we can't get a fresh location
+    }
+
+    // If we have a map controller, animate to the current location
+    if (_mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentUserLocation, 15),
+      );
+    }
+  } catch (e) {
+    print('Error moving to current location: $e');
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
 }
 
 // Extensions for math operations

@@ -167,16 +167,16 @@ class HomeScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        // First time, create test drivers
-                        // firestoreProvider.createTestDrivers();
+                    // ElevatedButton(
+                    //   onPressed: () {
+                    //     // First time, create test drivers
+                    //     // firestoreProvider.createTestDrivers();
                         
-                        // Test the cloud function
-                        testFindNearbyDriversFunction();
-                      },
-                      child: Text('Test Cloud Function'),
-                    ),
+                    //     // Test the cloud function
+                    //     testFindNearbyDriversFunction();
+                    //   },
+                    //   child: Text('Test Cloud Function'),
+                    // ),
                   ],
                 ),
               ),
