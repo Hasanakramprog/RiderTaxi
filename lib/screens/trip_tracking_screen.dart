@@ -989,53 +989,49 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
 }
 
   Future<void> _submitRating(double rating) async {
-    try {
-      // Update trip document with the rating
-      await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).update({
-        'userRating': rating,
-        'ratedAt': FieldValue.serverTimestamp()
+  try {
+    // Update the trip with user rating
+    await FirebaseFirestore.instance
+        .collection('trips')
+        .doc(widget.tripId)
+        .update({
+          'userRating': rating,
+          'ratedAt': FieldValue.serverTimestamp(),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+    
+    // The cloud function will automatically update the driver's rating
+    // No need to manually update driver collection here
+    
+    // Refresh trip data from Firestore to ensure UI is in sync
+    final updatedTrip = await FirebaseFirestore.instance
+        .collection('trips')
+        .doc(widget.tripId)
+        .get();
+    
+    if (updatedTrip.exists) {
+      setState(() {
+        _tripData = updatedTrip.data()!;
       });
-      
-      // Also update driver's average rating
-      final trip = await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).get();
-      final driverId = trip.data()?['driverId'];
-      
-      if (driverId != null) {
-        // Get driver reference
-        final driverRef = FirebaseFirestore.instance.collection('drivers').doc(driverId);
-        
-        // Use transaction to update average rating
-        await FirebaseFirestore.instance.runTransaction((transaction) async {
-          final driverDoc = await transaction.get(driverRef);
-          
-          if (driverDoc.exists) {
-            final currentRating = driverDoc.data()?['rating'] ?? 5.0;
-            final ratingCount = driverDoc.data()?['ratingCount'] ?? 0;
-            
-            // Calculate new average rating
-            final newRatingCount = ratingCount + 1;
-            final newRating = ((currentRating * ratingCount) + rating) / newRatingCount;
-            
-            transaction.update(driverRef, {
-              'rating': newRating,
-              'ratingCount': newRatingCount
-            });
-          }
-        });
-      }
-      
-      // Refresh trip data from Firestore to ensure UI is in sync
-      final updatedTrip = await FirebaseFirestore.instance.collection('trips').doc(widget.tripId).get();
-      if (updatedTrip.exists) {
-        setState(() {
-          _tripData = updatedTrip.data()!;
-        });
-      }
-    } catch (e) {
-      print('Error submitting rating: $e');
     }
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Thank you for your rating!'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    print('Error submitting rating: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Failed to submit rating. Please try again.'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
-
+}
   String _formatDuration(dynamic duration) {
     if (duration == null) return 'N/A';
     

@@ -10,6 +10,7 @@
 // const {onRequest} = require("firebase-functions/v2/https");
 // const logger = require("firebase-functions/logger");
 const findNearbyDriversModule = require("./findNearbyDrivers");
+const updateDriverRatingModule = require("./updateDriverRating");
 
 // Create and deploy your first functions
 // https://firebase.google.com/docs/functions/get-started
@@ -23,3 +24,5 @@ const findNearbyDriversModule = require("./findNearbyDrivers");
 exports.findNearbyDrivers = findNearbyDriversModule.findNearbyDrivers;
 // eslint-disable-next-line max-len
 exports.refreshNearbyDriversSearch = findNearbyDriversModule.refreshNearbyDriversSearch;
+// Export the driver rating update function
+exports.updateDriverRating = updateDriverRatingModule.updateDriverRating;

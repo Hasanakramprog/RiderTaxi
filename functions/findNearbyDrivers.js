@@ -142,26 +142,84 @@ async function findDriversForTrip(tripId, tripData) {
 
     // Send push notification to driver
     if (closestDriver.fcmToken) {
+      // Prepare message data
+      const messageData = {
+        tripId: tripId,
+        pickupAddress: tripData.pickup.address || "Unknown location",
+        pickupLatitude: pickupLat.toString(),
+        pickupLongitude: pickupLng.toString(),
+        dropoffAddress: tripData.dropoff.address || "Unknown destination",
+        fare: tripData.fare ? tripData.fare.toString() : "0",
+        distance: tripData.distance ? tripData.distance.toString() : "0",
+        // eslint-disable-next-line max-len
+        estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
+        expiresIn: "20", // Driver has 20 seconds to respond
+        notificationType: "tripRequest",
+      };
+      // Add stops information if present
+      // eslint-disable-next-line max-len
+      if (tripData.stops && Array.isArray(tripData.stops) && tripData.stops.length > 0) {
+        // Create a formatted string of stops for the notification
+        const stopsCount = tripData.stops.length;
+        messageData.hasStops = "true";
+        messageData.stopsCount = stopsCount.toString();
+        // Calculate total waiting time
+        let totalWaitingTime = 0;
+        // eslint-disable-next-line max-len
+        // Add details for each stop (up to 5 stops - FCM has message size limitations)
+        const maxStops = Math.min(stopsCount, 5);
+        for (let i = 0; i < maxStops; i++) {
+          const stop = tripData.stops[i];
+          if (stop) {
+            // Add address information
+            // eslint-disable-next-line max-len
+            messageData[`stop${i+1}Address`] = stop.address || "Unknown stop location";
+            // Add coordinates if available
+            if (stop.latitude && stop.longitude) {
+              messageData[`stop${i+1}Latitude`] = stop.latitude.toString();
+              messageData[`stop${i+1}Longitude`] = stop.longitude.toString();
+            }
+            // Add waiting time for each stop - important new addition
+            if (stop.waitingTime !== undefined) {
+              // eslint-disable-next-line max-len
+              messageData[`stop${i+1}WaitingTime`] = stop.waitingTime.toString();
+              totalWaitingTime += parseInt(stop.waitingTime) || 0;
+            } else {
+              messageData[`stop${i+1}WaitingTime`] = "0";
+            }
+          }
+        }
+        // Add total waiting time across all stops
+        messageData.totalWaitingTime = totalWaitingTime.toString();
+        // If more stops exist than we can include in the message
+        if (stopsCount > maxStops) {
+          messageData.additionalStops = (stopsCount - maxStops).toString();
+        }
+      } else {
+        messageData.hasStops = "false";
+        messageData.totalWaitingTime = "0";
+      }
+
+      // Create notification message with additional waiting time info
+      // eslint-disable-next-line max-len
+      let notificationBody = `New pickup request (${closestDriver.distance.toFixed(1)}km away)`;
+      // Add stops info
+      if (tripData.stops && tripData.stops.length > 0) {
+        // eslint-disable-next-line max-len
+        notificationBody += ` with ${tripData.stops.length} stop${tripData.stops.length > 1 ? "s" : ""}`;
+        // Add waiting time information if available
+        const totalWaitingMinutes = parseInt(messageData.totalWaitingTime) || 0;
+        if (totalWaitingMinutes > 0) {
+          notificationBody += ` (${totalWaitingMinutes} min waiting)`;
+        }
+      }
       const message = {
         token: closestDriver.fcmToken,
         notification: {
           title: "New Trip Request",
-          body:
-          `New pickup request (${closestDriver.distance.toFixed(1)}km away)`,
+          body: notificationBody,
         },
-        data: {
-          tripId: tripId,
-          pickupAddress: tripData.pickup.address || "Unknown location",
-          pickupLatitude: pickupLat.toString(),
-          pickupLongitude: pickupLng.toString(),
-          dropoffAddress: tripData.dropoff.address || "Unknown destination",
-          fare: tripData.fare ? tripData.fare.toString() : "0",
-          distance: tripData.distance ? tripData.distance.toString() : "0",
-          estimatedDuration:
-          tripData.duration ? tripData.duration.toString() : "0",
-          expiresIn: "20", // Driver has 20 seconds to respond
-          notificationType: "tripRequest",
-        },
+        data: messageData,
       };
 
       try {
