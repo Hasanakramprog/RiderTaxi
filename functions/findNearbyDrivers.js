@@ -1,14 +1,14 @@
 // eslint-disable-next-line max-len
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const admin = require("firebase-admin");
+const {admin, db, fcm} = require("./adminConfig"); // Use shared config
 
 // Initialize admin if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+// if (!admin.apps.length) {
+//   admin.initializeApp();
+// }
 
-const db = admin.firestore();
-const fcm = admin.messaging();
+// const db = admin.firestore();
+// const fcm = admin.messaging();
 
 /**
  * Logs debug information with a formatted label.

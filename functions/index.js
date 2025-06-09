@@ -11,7 +11,7 @@
 // const logger = require("firebase-functions/logger");
 const findNearbyDriversModule = require("./findNearbyDrivers");
 const updateDriverRatingModule = require("./updateDriverRating");
-
+const hotspotsModule = require("./hotspots");
 // Create and deploy your first functions
 // https://firebase.google.com/docs/functions/get-started
 
@@ -26,3 +26,6 @@ exports.findNearbyDrivers = findNearbyDriversModule.findNearbyDrivers;
 exports.refreshNearbyDriversSearch = findNearbyDriversModule.refreshNearbyDriversSearch;
 // Export the driver rating update function
 exports.updateDriverRating = updateDriverRatingModule.updateDriverRating;
+// Export hotspots functions
+exports.calculateHotspots = hotspotsModule.calculateHotspots;
+exports.getHotspots = hotspotsModule.getHotspots;

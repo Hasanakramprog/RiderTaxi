@@ -1,13 +1,13 @@
 /* eslint-disable linebreak-style */
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const admin = require("firebase-admin");
+const {admin, db} = require("./adminConfig"); // Use shared config
 
-// Initialize admin if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+// // Initialize admin if not already initialized
+// if (!admin.apps.length) {
+//   admin.initializeApp();
+// }
 
-const db = admin.firestore();
+// const db = admin.firestore();
 
 /**
  * Logs debug information with a formatted label.
