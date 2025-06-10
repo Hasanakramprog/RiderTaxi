@@ -155,6 +155,10 @@ async function findDriversForTrip(tripId, tripData) {
         estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
         expiresIn: "20", // Driver has 20 seconds to respond
         notificationType: "tripRequest",
+        // Add notification time from tripData
+        notificationTime: tripData.notificationTime ?
+         tripData.notificationTime.toMillis().toString() :
+        Date.now().toString(),
       };
       // Add stops information if present
       // eslint-disable-next-line max-len

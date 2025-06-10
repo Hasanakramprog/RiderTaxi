@@ -39,7 +39,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
   double _progressValue = 0.0;
 
   // Add this constant at the class level for consistency
-  static const int DRIVER_TIMEOUT_SECONDS = 30;
+  static const int DRIVER_TIMEOUT_SECONDS = 60;
 
   // Add these variables to your _TripTrackingScreenState class
   Timer? _searchingTimer;
