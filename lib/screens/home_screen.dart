@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/animated_taxi_road.dart';
 import 'trip_request_screen.dart';
 import 'trip_history_screen.dart';
+import 'settings_screen.dart'; // Add this import
 
 // Global navigator key to access context from anywhere
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -17,18 +18,29 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+  
     
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.local_taxi, size: 24),
-            SizedBox(width: 8),
-            Text('Ismail Taxi'),
+        title: Row(
+            children: [
+            const Icon(Icons.local_taxi, size: 24),
+            const SizedBox(width: 8),
+            const Text('Taxi App'),
           ],
         ),
         backgroundColor: Colors.amber,
         actions: [
+          // Add settings button
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.account_circle),
             onPressed: () {
@@ -36,23 +48,23 @@ class HomeScreen extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('User Profile'),
+                    title: const Text('Profile'),
                   content: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Email: ${authProvider.user?.email ?? "Not signed in"}'),
+                        Text('Email: ${authProvider.user?.email ?? "Not signed in"}'),
                       const SizedBox(height: 8),
                       const Text('Member since: May 2023'),
                     ],
                   ),
                   actions: [
                     TextButton(
-                      child: const Text('Close'),
+                        child: const Text('Cancel'),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     TextButton(
-                      child: const Text('Sign Out'),
+                        child: const Text('Logout'),
                       onPressed: () {
                         Navigator.of(context).pop();
                         authProvider.signOut();
@@ -79,7 +91,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     const SizedBox(height: 12),
                     Text(
-                      'Welcome to Ismail Taxi',
+                      'Welcome to Taxi App',
                       style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.amber.shade800,
@@ -87,7 +99,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Where do you want to go?',
+                        'Where would you like to go today?',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.grey.shade700,
                       ),
@@ -117,14 +129,14 @@ class HomeScreen extends StatelessWidget {
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.search_rounded, size: 28),
-                            SizedBox(width: 8),
+                            const Icon(Icons.search_rounded, size: 28),
+                            const SizedBox(width: 8),
                             Text(
-                              'BOOK A TAXI',
-                              style: TextStyle(
+                              'Request Ride',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1,
@@ -141,7 +153,7 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         _buildCircleButton(
                           icon: Icons.history,
-                          label: 'My Trips',
+                          label: 'Trip History',
                           onPressed: () {
                             // Navigate to trip history screen
                             Navigator.push(
@@ -151,10 +163,13 @@ class HomeScreen extends StatelessWidget {
                           },
                         ),
                         _buildCircleButton(
-                          icon: Icons.card_giftcard,
-                          label: 'Promotions',
+                          icon: Icons.settings, // Add settings button
+                          label: 'Settings',
                           onPressed: () {
-                            // Navigate to promotions screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                            );
                           },
                         ),
                         _buildCircleButton(
@@ -167,16 +182,6 @@ class HomeScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    // ElevatedButton(
-                    //   onPressed: () {
-                    //     // First time, create test drivers
-                    //     // firestoreProvider.createTestDrivers();
-                        
-                    //     // Test the cloud function
-                    //     testFindNearbyDriversFunction();
-                    //   },
-                    //   child: Text('Test Cloud Function'),
-                    // ),
                   ],
                 ),
               ),
@@ -203,7 +208,7 @@ class HomeScreen extends StatelessWidget {
             Expanded(
               child: _buildDestinationCard(
                 icon: Icons.work,
-                title: 'Work',
+                title: 'Work', // You can add this to ARB files
                 address: '456 Office Blvd',
               ),
             ),
@@ -215,7 +220,7 @@ class HomeScreen extends StatelessWidget {
             Expanded(
               child: _buildDestinationCard(
                 icon: Icons.shopping_bag,
-                title: 'Shopping',
+                title: 'Shopping', // You can add this to ARB files
                 address: 'City Mall',
               ),
             ),
@@ -223,7 +228,7 @@ class HomeScreen extends StatelessWidget {
             Expanded(
               child: _buildDestinationCard(
                 icon: Icons.restaurant,
-                title: 'Restaurant',
+                title: 'Restaurant', // You can add this to ARB files
                 address: 'Food Street',
               ),
             ),
@@ -321,238 +326,238 @@ class HomeScreen extends StatelessWidget {
     );
   }
   
-  // Add this to your main app to trigger a test trip
-Future<void> testFindNearbyDriversFunction() async {
-  try {
-    final firestore = FirebaseFirestore.instance;
+  // Update dialog methods to use localization
+  void _showDriverAcceptDialog(String driverId) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
     
-    // First, create test drivers
-    print('Creating test drivers...');
-    await _createTestDrivers();
+   
     
-    // Create a test trip with 'searching' status
-    final tripData = {
-      'pickup': {
-        'latitude': 37.7749,
-        'longitude': -122.4194,
-        'address': '123 Test St, San Francisco, CA'
-      },
-      'dropoff': {
-        'latitude': 37.7833,
-        'longitude': -122.4167,
-        'address': '456 Demo Ave, San Francisco, CA'
-      },
-      'distance': 2.5, // km
-      'duration': 10, // minutes
-      'fare': 15.0, // dollars
-      'status': 'searching', // This is crucial
-      'createdAt': FieldValue.serverTimestamp(),
-      'userId': firebase_auth.FirebaseAuth.instance.currentUser?.uid ?? 'test-user'
-    };
-    
-    print('Creating test trip...');
-    final tripRef = await firestore.collection('trips').add(tripData);
-    print('Test trip created with ID: ${tripRef.id}');
-    
-    // // Listen for updates on this trip
-    // tripRef.snapshots().listen((snapshot) {
-    //   if (snapshot.exists) {
-    //     final data = snapshot.data()!;
-    //     print('Trip updated: ${jsonEncode(data)}');
-        
-    //     if (data['nearbyDrivers'] != null) {
-    //       print('Found nearby drivers: ${data['nearbyDrivers'].length}');
-          
-    //       if (data['notifiedDriverId'] != null) {
-    //         print('Driver was notified! Function worked!');
-    //         _showDriverAcceptDialog(data['notifiedDriverId']);
-    //       }
-    //     }
-        
-    //     if (data['noDriversAvailable'] == true) {
-    //       print('No drivers available. Function processed the trip but found no drivers.');
-    //     }
-    //   }
-    // });
-    
-  } catch (e) {
-    print('Error testing function: $e');
-  }
-}
-
-// Helper method to create test drivers
-Future<void> _createTestDrivers() async {
-  try {
-    final firestore = FirebaseFirestore.instance;
-    
-    // Check if test drivers already exist
-    final existingDrivers = await firestore.collection('drivers')
-        .where('isTestDriver', isEqualTo: true)
-        .get();
-    
-    if (existingDrivers.docs.isNotEmpty) {
-      print('Test drivers already exist (${existingDrivers.docs.length} drivers)');
-      return;
-    }
-    
-    // Create a batch for adding multiple drivers efficiently
-    final batch = firestore.batch();
-    
-    // Driver 1 - Very close to the pickup location
-    final driver1Ref = firestore.collection('drivers').doc('test-driver-1');
-    batch.set(driver1Ref, {
-      'displayName': 'Test Driver 1',
-      'isOnline': true,
-      'isAvailable': true,
-      'isTestDriver': true,
-      'location': {
-        'latitude': 37.7751, // Very close to pickup
-        'longitude': -122.4196
-      },
-      'fcmToken': 'test-token-1',
-      'rating': 4.8,
-      'carDetails': {
-        'model': 'Toyota Camry',
-        'color': 'Black',
-        'plateNumber': 'TEST-123'
-      }
-    });
-    
-    // Driver 2 - A bit further away
-    final driver2Ref = firestore.collection('drivers').doc('test-driver-2');
-    batch.set(driver2Ref, {
-      'displayName': 'Test Driver 2',
-      'isOnline': true,
-      'isAvailable': true,
-      'isTestDriver': true,
-      'location': {
-        'latitude': 37.7780, // ~0.5km away
-        'longitude': -122.4220
-      },
-      'fcmToken': 'test-token-2',
-      'rating': 4.5,
-      'carDetails': {
-        'model': 'Honda Accord',
-        'color': 'White',
-        'plateNumber': 'TEST-456'
-      }
-    });
-    
-    // Driver 3 - Even further away
-    final driver3Ref = firestore.collection('drivers').doc('test-driver-3');
-    batch.set(driver3Ref, {
-      'displayName': 'Test Driver 3',
-      'isOnline': true,
-      'isAvailable': true,
-      'isTestDriver': true,
-      'location': {
-        'latitude': 37.7700, // ~1km away
-        'longitude': -122.4150
-      },
-      'fcmToken': 'test-token-3',
-      'rating': 4.9,
-      'carDetails': {
-        'model': 'Tesla Model 3',
-        'color': 'Red',
-        'plateNumber': 'TEST-789'
-      }
-    });
-    
-    // Commit the batch
-    await batch.commit();
-    print('Successfully created 3 test drivers');
-  } catch (e) {
-    print('Error creating test drivers: $e');
-  }
-}
-
-// Helper method to simulate driver accepting a trip
-void _showDriverAcceptDialog(String driverId) {
-  // This would be shown to simulate driver accepting the trip
-  // In a real app, this would come from the driver app
-  
-  // Get the BuildContext - you'll need to refactor this if used in a StatelessWidget
-  final context = navigatorKey.currentContext;
-  if (context == null) return;
-  
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Driver Found!'),
-      content: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance.collection('drivers').doc(driverId).get(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
-          }
-          
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Text('Driver information not available');
-          }
-          
-          final driverData = snapshot.data!.data() as Map<String, dynamic>;
-          final carDetails = driverData['carDetails'] as Map<String, dynamic>?;
-          
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Name: ${driverData['displayName'] ?? 'Unknown'}'),
-              Text('Rating: ${driverData['rating'] ?? 'N/A'} ⭐'),
-              if (carDetails != null) ...[
-                const SizedBox(height: 8),
-                Text('Car: ${carDetails['model'] ?? 'Unknown'}'),
-                Text('Color: ${carDetails['color'] ?? 'Unknown'}'),
-                Text('Plate: ${carDetails['plateNumber'] ?? 'Unknown'}'),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Driver Found!'),
+        content: FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('drivers').doc(driverId).get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const CircularProgressIndicator();
+            }
+            
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Text('Driver information not available');
+            }
+            
+            final driverData = snapshot.data!.data() as Map<String, dynamic>;
+            final carDetails = driverData['carDetails'] as Map<String, dynamic>?;
+            
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                Text('Name: ${driverData['displayName'] ?? 'Unknown'}'),
+                Text('Rating: ${driverData['rating'] ?? 'N/A'} ⭐'),
+                if (carDetails != null) ...[
+                  const SizedBox(height: 8),
+                  Text('Car: ${carDetails['model'] ?? 'Unknown'}'),
+                  Text('Color: ${carDetails['color'] ?? 'Unknown'}'),
+                  Text('Plate: ${carDetails['plateNumber'] ?? 'Unknown'}'),
+                ],
+                const SizedBox(height: 12),
+                const Text('Driver is on the way!'),
               ],
-              const SizedBox(height: 12),
-              const Text('Driver is on the way!'),
-            ],
-          );
-        },
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel Trip'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+          ElevatedButton(
+            child: const Text('OK'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          child: const Text('Cancel Trip'),
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-        ),
-        ElevatedButton(
-          child: const Text('OK'),
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-        ),
-      ],
-    ),
-  );
-  
-  // Optional: Simulate driver arriving after a delay
-  Future.delayed(const Duration(seconds: 5), () {
-    _simulateDriverArrival(driverId);
-  });
-}
+    );
+    
+    // Optional: Simulate driver arriving after a delay
+    Future.delayed(const Duration(seconds: 5), () {
+      _simulateDriverArrival(driverId);
+    });
+  }
 
-// Helper method to simulate driver arrival
-void _simulateDriverArrival(String driverId) {
-  final context = navigatorKey.currentContext;
-  if (context == null) return;
-  
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Driver Has Arrived!'),
-      content: const Text('Your driver is waiting outside.'),
-      actions: [
-        ElevatedButton(
-          child: const Text('I\'m Coming'),
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-        ),
-      ],
-    ),
-  );
-}
+  // Helper method to simulate driver arrival
+  void _simulateDriverArrival(String driverId) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+    
+   
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Driver Has Arrived!'),
+        content: const Text('Your driver is waiting outside.'),
+        actions: [
+          ElevatedButton(
+            child: const Text('I\'m Coming'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Keep existing methods unchanged...
+  Future<void> testFindNearbyDriversFunction() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      
+      // First, create test drivers
+      print('Creating test drivers...');
+      await _createTestDrivers();
+      
+      // Create a test trip with 'searching' status
+      final tripData = {
+        'pickup': {
+          'latitude': 37.7749,
+          'longitude': -122.4194,
+          'address': '123 Test St, San Francisco, CA'
+        },
+        'dropoff': {
+          'latitude': 37.7833,
+          'longitude': -122.4167,
+          'address': '456 Demo Ave, San Francisco, CA'
+        },
+        'distance': 2.5, // km
+        'duration': 10, // minutes
+        'fare': 15.0, // dollars
+        'status': 'searching', // This is crucial
+        'createdAt': FieldValue.serverTimestamp(),
+        'userId': firebase_auth.FirebaseAuth.instance.currentUser?.uid ?? 'test-user'
+      };
+      
+      print('Creating test trip...');
+      final tripRef = await firestore.collection('trips').add(tripData);
+      print('Test trip created with ID: ${tripRef.id}');
+      
+      // // Listen for updates on this trip
+      // tripRef.snapshots().listen((snapshot) {
+      //   if (snapshot.exists) {
+      //     final data = snapshot.data()!;
+      //     print('Trip updated: ${jsonEncode(data)}');
+        
+      //     if (data['nearbyDrivers'] != null) {
+      //       print('Found nearby drivers: ${data['nearbyDrivers'].length}');
+          
+      //       if (data['notifiedDriverId'] != null) {
+      //         print('Driver was notified! Function worked!');
+      //         _showDriverAcceptDialog(data['notifiedDriverId']);
+      //       }
+      //     }
+        
+      //     if (data['noDriversAvailable'] == true) {
+      //       print('No drivers available. Function processed the trip but found no drivers.');
+      //     }
+      //   }
+      // });
+      
+    } catch (e) {
+      print('Error testing function: $e');
+    }
+  }
+
+  // Helper method to create test drivers
+  Future<void> _createTestDrivers() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      
+      // Check if test drivers already exist
+      final existingDrivers = await firestore.collection('drivers')
+          .where('isTestDriver', isEqualTo: true)
+          .get();
+      
+      if (existingDrivers.docs.isNotEmpty) {
+        print('Test drivers already exist (${existingDrivers.docs.length} drivers)');
+        return;
+      }
+      
+      // Create a batch for adding multiple drivers efficiently
+      final batch = firestore.batch();
+      
+      // Driver 1 - Very close to the pickup location
+      final driver1Ref = firestore.collection('drivers').doc('test-driver-1');
+      batch.set(driver1Ref, {
+        'displayName': 'Test Driver 1',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': 37.7751, // Very close to pickup
+          'longitude': -122.4196
+        },
+        'fcmToken': 'test-token-1',
+        'rating': 4.8,
+        'carDetails': {
+          'model': 'Toyota Camry',
+          'color': 'Black',
+          'plateNumber': 'TEST-123'
+        }
+      });
+      
+      // Driver 2 - A bit further away
+      final driver2Ref = firestore.collection('drivers').doc('test-driver-2');
+      batch.set(driver2Ref, {
+        'displayName': 'Test Driver 2',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': 37.7780, // ~0.5km away
+          'longitude': -122.4220
+        },
+        'fcmToken': 'test-token-2',
+        'rating': 4.5,
+        'carDetails': {
+          'model': 'Honda Accord',
+          'color': 'White',
+          'plateNumber': 'TEST-456'
+        }
+      });
+      
+      // Driver 3 - Even further away
+      final driver3Ref = firestore.collection('drivers').doc('test-driver-3');
+      batch.set(driver3Ref, {
+        'displayName': 'Test Driver 3',
+        'isOnline': true,
+        'isAvailable': true,
+        'isTestDriver': true,
+        'location': {
+          'latitude': 37.7700, // ~1km away
+          'longitude': -122.4150
+        },
+        'fcmToken': 'test-token-3',
+        'rating': 4.9,
+        'carDetails': {
+          'model': 'Tesla Model 3',
+          'color': 'Red',
+          'plateNumber': 'TEST-789'
+        }
+      });
+      
+      // Commit the batch
+      await batch.commit();
+      print('Successfully created 3 test drivers');
+    } catch (e) {
+      print('Error creating test drivers: $e');
+    }
+  }
 }

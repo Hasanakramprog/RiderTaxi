@@ -21,7 +21,7 @@ class MapWidget extends StatefulWidget {
     this.allowMapTaps = false,
     this.isPickupSelection = true,
     this.stopIndex = -1,
-    this.showDriverLocation = false, // Default to false
+    this.showDriverLocation = true, // Default to false
     this.tripId, // Optional parameter
     this.showCompletedTrip = false, // Add this parameter
     this.tripData, // Add this parameter
@@ -147,13 +147,13 @@ void _clearMapResources(MapProvider? mapProvider) {
       final location = driverData['location'];
       
       if (location != null && 
-          location['latitude'] != null && 
-          location['longitude'] != null) {
-        
+          location.latitude != null && 
+          location.longitude != null) {
+
         // Create a driver marker
         final driverPosition = LatLng(
-          location['latitude'],
-          location['longitude'],
+          location.latitude,
+          location.longitude,
         );
         
         setState(() {

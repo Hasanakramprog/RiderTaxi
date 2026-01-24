@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:taxi_auth_app/providers/auth_provider.dart';
 import 'package:taxi_auth_app/providers/map_provider.dart';
 import 'package:taxi_auth_app/providers/firestore_provider.dart';
 import 'package:taxi_auth_app/widgets/auth_wrapper.dart';
-
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> createTestTrips() async {
   final now = Timestamp.now();
@@ -173,7 +172,8 @@ class MyApp extends StatelessWidget {
           primaryColor: Colors.amber,
           colorScheme: ColorScheme.fromSwatch(
             primarySwatch: Colors.amber,
-            accentColor: Colors.amberAccent,
+          ).copyWith(
+            secondary: Colors.amberAccent,
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,
           appBarTheme: const AppBarTheme(

@@ -628,16 +628,61 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
 
   void _loadDriverDetails(String driverId) {
     // Load driver details
+
   }
 
   void _playNotificationSound() {
     // Play notification sound
   }
 
-  void _showDriverDetailsDialog(Map<String, dynamic> tripData) {
-    final driverInfo = tripData['driverInfo'] ?? {};
-    final carDetails = driverInfo['carDetails'] ?? {};
+  void _showDriverDetailsDialog(Map<String, dynamic> tripData) async {
+  // Extract driver ID from trip data
+  final driverId = tripData['driverId'];
+  
+  if (driverId == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Driver information not available')),
+    );
+    return;
+  }
+  
+  // Show loading dialog first
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => const AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading driver details...'),
+        ],
+      ),
+    ),
+  );
+  
+  try {
+    // Fetch driver data from Firestore
+    final driverDoc = await FirebaseFirestore.instance
+        .collection('drivers')
+        .doc(driverId)
+        .get();
     
+    // Close loading dialog
+    Navigator.of(context).pop();
+    
+    if (!driverDoc.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Driver details not found')),
+      );
+      return;
+    }
+    
+    final driverData = driverDoc.data()!;
+    final carDetails = driverData['vehicleDetails'] ?? {};
+    
+    // Show the actual driver details dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -650,10 +695,10 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
               children: [
                 CircleAvatar(
                   radius: 30,
-                  backgroundImage: driverInfo['photoURL'] != null 
-                      ? NetworkImage(driverInfo['photoURL']) 
+                  backgroundImage: driverData['baseFaceImageUrl'] != null 
+                      ? NetworkImage(driverData['baseFaceImageUrl']) 
                       : null,
-                  child: driverInfo['photoURL'] == null 
+                  child: driverData['baseFaceImageUrl'] == null 
                       ? const Icon(Icons.person, size: 30) 
                       : null,
                 ),
@@ -663,7 +708,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        driverInfo['displayName'] ?? 'Driver',
+                        driverData['displayName'] ?? driverData['name'] ?? 'Driver',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -672,9 +717,18 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
                       Row(
                         children: [
                           const Icon(Icons.star, color: Colors.amber, size: 16),
-                          Text(' ${driverInfo['rating']?.toStringAsFixed(1) ?? '4.5'}'),
+                          Text(' ${driverData['rating']?.toStringAsFixed(1) ?? '4.5'}'),
+                          Text(' (${driverData['ratingCount'] ?? 0} trips)'),
                         ],
                       ),
+                      if (driverData['phoneNumber'] != null)
+                        Text(
+                          driverData['phoneNumber'],
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -692,7 +746,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
                 children: [
                   const Icon(Icons.directions_car, size: 16),
                   const SizedBox(width: 8),
-                  Text('${carDetails['color'] ?? 'N/A'} ${carDetails['model'] ?? 'Car'}'),
+                  Text('${carDetails['color'] ?? 'N/A'}  ${carDetails['model'] ?? 'Car'}'),
                 ],
               ),
               const SizedBox(height: 4),
@@ -703,6 +757,16 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
                   Text('Plate: ${carDetails['plateNumber'] ?? 'N/A'}'),
                 ],
               ),
+              if (carDetails['year'] != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Year: ${carDetails['year']}'),
+                  ],
+                ),
+              ],
             ],
             const SizedBox(height: 16),
             // ETA
@@ -710,23 +774,55 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
               'Estimated arrival: ${_formatEta(tripData['driverEta'])}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
+            // Driver status
+            if (driverData['isOnline'] == true)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Online',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              // Launch phone call to driver
-              _callDriver(driverInfo['phoneNumber']);
-            },
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.phone),
-                SizedBox(width: 8),
-                Text('Call Driver'),
-              ],
+          if (driverData['phoneNumber'] != null)
+            TextButton(
+              onPressed: () {
+                _callDriver(driverData['phoneNumber']);
+              },
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.phone),
+                  SizedBox(width: 8),
+                  Text('Call Driver'),
+                ],
+              ),
             ),
-          ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('OK'),
@@ -734,7 +830,16 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
         ],
       ),
     );
+  } catch (e) {
+    // Close loading dialog if still open
+    Navigator.of(context).pop();
+    
+    // Show error message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error loading driver details: $e')),
+    );
   }
+}
 
   // Helper function to format ETA
   String _formatEta(dynamic etaMinutes) {

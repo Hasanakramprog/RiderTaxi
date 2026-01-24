@@ -604,7 +604,7 @@ class _AnimatedTaxiRoadState extends State<AnimatedTaxiRoad> with TickerProvider
                   ),
                   child: const Center(
                     child: Text(
-                      'Ismeal TAXI',
+                      'TAXI',
                       style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.bold,

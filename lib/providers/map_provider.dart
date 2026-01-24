@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // Add this import
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -83,11 +84,35 @@ class MapProvider extends ChangeNotifier {
     return _estimatedDuration ?? 0;
   }
 
+  // Add a flag to prevent notifications during build
+  bool _isBuildingWidget = false;
+
+  // Helper method to safely notify listeners
+  void _safeNotifyListeners() {
+    if (!_isBuildingWidget) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          notifyListeners();
+        }
+      });
+    }
+  }
+
+  // Add a mounted check property
+  bool _mounted = true;
+  bool get mounted => _mounted;
+
+  @override
+  void dispose() {
+    _mounted = false;
+    super.dispose();
+  }
+
   // Initialize user location
   Future<void> initializeUserLocation() async {
     _isInitializing = true;
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       Location location = Location();
@@ -159,7 +184,7 @@ class MapProvider extends ChangeNotifier {
     } finally {
       _isInitializing = false;
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
   // Update setDefaultLocation method
@@ -192,31 +217,33 @@ Future<void> setDefaultLocation() async {
   } finally {
     _isInitializing = false;
     _isLoading = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 }
   // Set map controller
   void setMapController(GoogleMapController controller) {
     _mapController = controller;
     
-    // Only move camera if we have initialized location and controller
-    if (_hasInitializedLocation && !_isInitializing) {
-      // If we have a custom pickup location, use that
-      LatLng cameraTarget = _hasCustomPickupLocation && _pickupLocation != null
-          ? _pickupLocation!.coordinates
-          : _currentUserLocation;
-      
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(cameraTarget, 15),
-      );
-    }
+    // Use post-frame callback to avoid calling during build
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_hasInitializedLocation && !_isInitializing && _mapController != null) {
+        // If we have a custom pickup location, use that
+        LatLng cameraTarget = _hasCustomPickupLocation && _pickupLocation != null
+            ? _pickupLocation!.coordinates
+            : _currentUserLocation;
+        
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(cameraTarget, 15),
+        );
+      }
+    });
   }
 
   // Set current location as pickup
   Future<void> setCurrentLocationAsPickup() async {
     if (_hasInitializedLocation) {
       _isLoading = true;
-      notifyListeners();
+      _safeNotifyListeners();
 
       try {
         // Set pickup location from current user location
@@ -240,7 +267,7 @@ Future<void> setDefaultLocation() async {
         print('Error setting current location as pickup: $e');
       } finally {
         _isLoading = false;
-        notifyListeners();
+        _safeNotifyListeners();
       }
     }
   }
@@ -248,7 +275,7 @@ Future<void> setDefaultLocation() async {
   // Add this new method after setCurrentLocationAsPickup
   Future<void> resetPickupToCurrentLocation() async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Re-fetch the current location to make sure it's up to date
@@ -280,18 +307,18 @@ Future<void> setDefaultLocation() async {
       print('Error resetting pickup to current location: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   // Set pickup location from LocationModel
   Future<void> setPickupLocation(LocationModel location) async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       _pickupLocation = location;
-    _hasCustomPickupLocation = true;
+      _hasCustomPickupLocation = true;
       _updateMarkers();
 
       // Move camera to the selected location
@@ -306,14 +333,14 @@ Future<void> setDefaultLocation() async {
       print('Error setting pickup location: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   // Set dropoff location from LocationModel
   Future<void> setDropoffLocation(LocationModel location) async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       _dropoffLocation = location;
@@ -331,7 +358,7 @@ Future<void> setDefaultLocation() async {
       print('Error setting dropoff location: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -345,7 +372,7 @@ Future<void> setDefaultLocation() async {
 
     _updateMarkers();
     _updateRoute();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // Update an existing stop
@@ -363,7 +390,7 @@ Future<void> setDefaultLocation() async {
 
       _updateMarkers();
       _updateRoute();
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -373,7 +400,7 @@ Future<void> setDefaultLocation() async {
       _stops.removeAt(index);
       _updateMarkers();
       _updateRoute();
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -382,16 +409,16 @@ Future<void> setDefaultLocation() async {
     _stops.clear();
     _updateMarkers();
     _updateRoute();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // Clear pickup location
   void clearPickupLocation() {
     _pickupLocation = null;
-     _hasCustomPickupLocation = false;
+    _hasCustomPickupLocation = false;
     _updateMarkers();
     _updateRoute();
-    notifyListeners();
+    _safeNotifyListeners();
   }
   // Add this method to reset the custom pickup flag
 void clearCustomPickupFlag() {
@@ -402,13 +429,13 @@ void clearCustomPickupFlag() {
     _dropoffLocation = null;
     _updateMarkers();
     _updateRoute();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // Set pickup location from map tap
   Future<void> setPickupLocationFromMap(LatLng latLng) async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Get address from tapped coordinates
@@ -435,14 +462,14 @@ void clearCustomPickupFlag() {
       print('Error setting pickup from map: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   // Set dropoff location from map tap
   Future<void> setDropoffLocationFromMap(LatLng latLng) async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Get address from tapped coordinates
@@ -467,14 +494,14 @@ void clearCustomPickupFlag() {
       print('Error setting dropoff from map: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   // Set stop location from map tap
   Future<void> setStopLocationFromMap(LatLng latLng, int index) async {
     _isLoading = true;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Get address from tapped coordinates
@@ -506,7 +533,7 @@ void clearCustomPickupFlag() {
       print('Error setting stop from map: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -561,12 +588,12 @@ void clearCustomPickupFlag() {
 
     // Need at least pickup and dropoff to calculate a route
     if (_pickupLocation == null || _dropoffLocation == null) {
-      notifyListeners();
+      // Don't notify here as this might be called during build
       return;
     }
 
     _isLoading = true;
-    notifyListeners();
+    // Don't notify here either
 
     try {
       // Create list of all waypoints with valid locations (filter out stops without location)
@@ -646,7 +673,7 @@ void clearCustomPickupFlag() {
       print('Error updating route: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -807,7 +834,7 @@ void clearCustomPickupFlag() {
   void updateDriverLocation(Marker driverMarker) {
     _markers.removeWhere((marker) => marker.markerId.value == 'driver');
     _markers.add(driverMarker);
-    notifyListeners();
+    _safeNotifyListeners();
   }
   
   // Remove driver marker from the markers set
@@ -820,23 +847,23 @@ void clearCustomPickupFlag() {
   void addTripMarker(Marker marker) {
     _tripMarkers.removeWhere((m) => m.markerId == marker.markerId);
     _tripMarkers.add(marker);
-    notifyListeners();
+    _safeNotifyListeners();
   }
   
   void clearTripMarkers() {
     _tripMarkers.clear();
-    notifyListeners();
+    _safeNotifyListeners();
   }
   
   void setPolyline(Polyline polyline) {
     _polylines.clear();
     _polylines.add(polyline);
-    notifyListeners();
+    _safeNotifyListeners();
   }
   
   void clearPolylines() {
     _polylines.clear();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   // Add this method to your MapProvider class
@@ -870,7 +897,7 @@ void clearCustomPickupFlag() {
 Future<void> moveToCurrentLocation() async {
   // Set loading state
   _isLoading = true;
-  notifyListeners();
+  _safeNotifyListeners();
 
   try {
     // Try to get fresh location data
@@ -904,7 +931,7 @@ Future<void> moveToCurrentLocation() async {
     print('Error moving to current location: $e');
   } finally {
     _isLoading = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 }
 }
