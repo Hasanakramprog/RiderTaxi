@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/map_provider.dart';
 import '../providers/firestore_provider.dart';
 import '../widgets/map_widget.dart';
-import '../widgets/location_input.dart';
-import '../models/location_model.dart';
 import 'trip_tracking_screen.dart';
 
 class TripRequestScreen extends StatefulWidget {
@@ -210,7 +207,9 @@ class _TripRequestScreenState extends State<TripRequestScreen>
                               const SizedBox(width: 12),
                             Flexible(
                               child: Text(
-                                mapProvider.locationStatus,
+                                mapProvider.isInitializing
+                                    ? 'Getting your location...'
+                                    : 'Location ready',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: Colors.white,

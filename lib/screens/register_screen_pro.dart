@@ -90,11 +90,13 @@ class _RegisterScreenState extends State<RegisterScreen>
     });
 
     try {
-      await _authService.signUpWithEmailAndPassword(
+      final userCredential = await _authService.registerWithEmailAndPassword(
         _emailController.text.trim(),
         _passwordController.text.trim(),
-        _nameController.text.trim(),
       );
+
+      // Update display name after registration
+      await userCredential.user?.updateDisplayName(_nameController.text.trim());
     } catch (e) {
       setState(() {
         _isLoading = false;
