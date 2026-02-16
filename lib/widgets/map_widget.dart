@@ -15,9 +15,9 @@ class MapWidget extends StatefulWidget {
   // Add these parameters
   final bool showCompletedTrip;
   final Map<String, dynamic>? tripData;
-  
+
   const MapWidget({
-    Key? key, 
+    Key? key,
     this.allowMapTaps = false,
     this.isPickupSelection = true,
     this.stopIndex = -1,
@@ -38,31 +38,31 @@ class _MapWidgetState extends State<MapWidget> {
   late MapProvider _mapProvider;
   // Add a polyline set for routes
   Set<Polyline> _polylines = {};
-  
+
   @override
   void initState() {
     super.initState();
     // Initialize user location when widget is created
     Future.delayed(Duration.zero, () {
-     _mapProvider = Provider.of<MapProvider>(context, listen: false);
+      _mapProvider = Provider.of<MapProvider>(context, listen: false);
       _mapProvider.initializeUserLocation();
-      
+
       // Set up driver tracking if needed
       if (widget.showDriverLocation && widget.tripId != null) {
         _setupDriverTracking();
       }
-      
+
       // Show completed trip route if needed
       if (widget.showCompletedTrip && widget.tripData != null) {
         _showCompletedTripRoute();
       }
     });
   }
-  
+
   @override
   void didUpdateWidget(MapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     // Handle changes to showDriverLocation or tripId
     if (widget.showDriverLocation != oldWidget.showDriverLocation ||
         widget.tripId != oldWidget.tripId) {
@@ -72,7 +72,7 @@ class _MapWidgetState extends State<MapWidget> {
         _cancelDriverTracking();
       }
     }
-    
+
     // Handle changes to showCompletedTrip or tripData
     if ((widget.showCompletedTrip != oldWidget.showCompletedTrip) ||
         (widget.tripData != oldWidget.tripData)) {
@@ -81,111 +81,114 @@ class _MapWidgetState extends State<MapWidget> {
       }
     }
   }
-  
-  @override
-void dispose() {
-  // Cancel any tracking subscriptions
-  _cancelDriverTracking();
-  
-  // Clear map resources when widget is disposed
-  // Get MapProvider before widget is disposed
- _clearMapResources(_mapProvider);
-  
-  super.dispose();
-}
 
-// Add this new method to clear map resources
-void _clearMapResources(MapProvider? mapProvider) {
-  try {
-    // Clear provider resources if available
-    if (mapProvider != null) {
-      mapProvider.clearAllMapResources();
-    }
-    
-    // Clear local polylines
-    _polylines.clear();
-    
-  } catch (e) {
-    print('Error clearing map resources: $e');
+  @override
+  void dispose() {
+    // Cancel any tracking subscriptions
+    _cancelDriverTracking();
+
+    // Clear map resources when widget is disposed
+    // Get MapProvider before widget is disposed
+    _clearMapResources(_mapProvider);
+
+    super.dispose();
   }
-}
-  
+
+  // Add this new method to clear map resources
+  void _clearMapResources(MapProvider? mapProvider) {
+    try {
+      // Clear provider resources if available
+      if (mapProvider != null) {
+        mapProvider.clearAllMapResources();
+      }
+
+      // Clear local polylines
+      _polylines.clear();
+    } catch (e) {
+      print('Error clearing map resources: $e');
+    }
+  }
+
   void _setupDriverTracking() {
     _cancelDriverTracking(); // Cancel any existing subscriptions
-    
+
     if (widget.tripId == null) return;
-    
+
     // First, get the trip to find the driver ID
     _tripSubscription = FirebaseFirestore.instance
         .collection('trips')
         .doc(widget.tripId)
         .snapshots()
         .listen((tripSnapshot) {
-      if (!tripSnapshot.exists) return;
-      
-      final tripData = tripSnapshot.data()!;
-      final driverId = tripData['driverId'] ?? tripData['notifiedDriverId'];
-      
-      if (driverId != null) {
-        // Now track the driver's location
-        _trackDriverLocation(driverId);
-      }
-    });
+          if (!tripSnapshot.exists) return;
+
+          final tripData = tripSnapshot.data()!;
+          final driverId = tripData['driverId'] ?? tripData['notifiedDriverId'];
+
+          if (driverId != null) {
+            // Now track the driver's location
+            _trackDriverLocation(driverId);
+          }
+        });
   }
-  
+
   void _trackDriverLocation(String driverId) {
     _driverSubscription?.cancel();
-    
+
     _driverSubscription = FirebaseFirestore.instance
         .collection('drivers')
         .doc(driverId)
         .snapshots()
         .listen((driverSnapshot) {
-      if (!driverSnapshot.exists) return;
-      
-      final driverData = driverSnapshot.data()!;
-      final location = driverData['location'];
-      
-      if (location != null && 
-          location.latitude != null && 
-          location.longitude != null) {
+          if (!driverSnapshot.exists) return;
 
-        // Create a driver marker
-        final driverPosition = LatLng(
-          location.latitude,
-          location.longitude,
-        );
-        
-        setState(() {
-          _driverMarker = Marker(
-            markerId: const MarkerId('driver'),
-            position: driverPosition,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-            infoWindow: InfoWindow(
-              title: 'Your Driver',
-              snippet: driverData['displayName'] ?? 'Driver',
-            ),
-          );
+          final driverData = driverSnapshot.data()!;
+          final location = driverData['location'];
+
+          if (location != null &&
+              location.latitude != null &&
+              location.longitude != null) {
+            // Create a driver marker
+            final driverPosition = LatLng(
+              location.latitude,
+              location.longitude,
+            );
+
+            setState(() {
+              _driverMarker = Marker(
+                markerId: const MarkerId('driver'),
+                position: driverPosition,
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueAzure,
+                ),
+                infoWindow: InfoWindow(
+                  title: 'Your Driver',
+                  snippet: driverData['displayName'] ?? 'Driver',
+                ),
+              );
+            });
+
+            // Update the map to show the driver's location
+            final mapProvider = Provider.of<MapProvider>(
+              context,
+              listen: false,
+            );
+            mapProvider.updateDriverLocation(_driverMarker!);
+
+            // Adjust camera to include both pickup and driver
+            if (mapProvider.pickupLocation != null) {
+              _updateCameraForDriverAndPickup(
+                driverPosition,
+                mapProvider.pickupLocation!.coordinates,
+                mapProvider,
+              );
+            }
+          }
         });
-        
-        // Update the map to show the driver's location
-        final mapProvider = Provider.of<MapProvider>(context, listen: false);
-        mapProvider.updateDriverLocation(_driverMarker!);
-        
-        // Adjust camera to include both pickup and driver
-        if (mapProvider.pickupLocation != null) {
-          _updateCameraForDriverAndPickup(
-            driverPosition, 
-            mapProvider.pickupLocation!.coordinates,
-            mapProvider,
-          );
-        }
-      }
-    });
   }
-  
+
   void _updateCameraForDriverAndPickup(
-    LatLng driverPosition, 
+    LatLng driverPosition,
     LatLng pickupPosition,
     MapProvider mapProvider,
   ) {
@@ -194,23 +197,23 @@ void _clearMapResources(MapProvider? mapProvider) {
       min(driverPosition.latitude, pickupPosition.latitude) - 0.01,
       min(driverPosition.longitude, pickupPosition.longitude) - 0.01,
     );
-    
+
     final northeast = LatLng(
       max(driverPosition.latitude, pickupPosition.latitude) + 0.01,
       max(driverPosition.longitude, pickupPosition.longitude) + 0.01,
     );
-    
+
     final bounds = LatLngBounds(southwest: southwest, northeast: northeast);
     mapProvider.animateToLatLngBounds(bounds, 50);
   }
-  
+
   void _cancelDriverTracking() {
     _tripSubscription?.cancel();
     _tripSubscription = null;
-    
+
     _driverSubscription?.cancel();
     _driverSubscription = null;
-    
+
     // Remove driver marker
     if (_driverMarker != null) {
       final mapProvider = Provider.of<MapProvider>(context, listen: false);
@@ -218,63 +221,65 @@ void _clearMapResources(MapProvider? mapProvider) {
       _driverMarker = null;
     }
   }
-  
+
   // Add this method to show completed trip route
   void _showCompletedTripRoute() async {
     try {
       final pickup = widget.tripData?['pickup'];
       final dropoff = widget.tripData?['dropoff'];
-      
+
       if (pickup == null || dropoff == null) return;
-      
+
       final pickupLatLng = LatLng(
-        pickup['latitude'] ?? 0.0, 
-        pickup['longitude'] ?? 0.0
+        pickup['latitude'] ?? 0.0,
+        pickup['longitude'] ?? 0.0,
       );
-      
+
       final dropoffLatLng = LatLng(
-        dropoff['latitude'] ?? 0.0, 
-        dropoff['longitude'] ?? 0.0
+        dropoff['latitude'] ?? 0.0,
+        dropoff['longitude'] ?? 0.0,
       );
-      
+
       // Create markers for pickup and dropoff
       final pickupMarker = Marker(
         markerId: const MarkerId('trip_pickup'),
         position: pickupLatLng,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         infoWindow: InfoWindow(
-          title: 'Pickup', 
-          snippet: pickup['address'] ?? 'Pickup location'
+          title: 'Pickup',
+          snippet: pickup['address'] ?? 'Pickup location',
         ),
       );
-      
+
       final dropoffMarker = Marker(
         markerId: const MarkerId('trip_dropoff'),
         position: dropoffLatLng,
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         infoWindow: InfoWindow(
-          title: 'Dropoff', 
-          snippet: dropoff['address'] ?? 'Dropoff location'
+          title: 'Dropoff',
+          snippet: dropoff['address'] ?? 'Dropoff location',
         ),
       );
-      
+
       // Add markers to map provider
       final mapProvider = Provider.of<MapProvider>(context, listen: false);
       mapProvider.addTripMarker(pickupMarker);
       mapProvider.addTripMarker(dropoffMarker);
-      
+
       // Get route polyline points
       final routePoints = widget.tripData?['routePoints'];
-      
+
       if (routePoints != null && routePoints is List) {
         final List<LatLng> polylinePoints = [];
-        
+
         for (var point in routePoints) {
-          if (point is Map && point['latitude'] != null && point['longitude'] != null) {
+          if (point is Map &&
+              point['latitude'] != null &&
+              point['longitude'] != null) {
             polylinePoints.add(LatLng(point['latitude'], point['longitude']));
           }
         }
-        
+
         if (polylinePoints.isNotEmpty) {
           // Create a polyline
           final polyline = Polyline(
@@ -283,12 +288,12 @@ void _clearMapResources(MapProvider? mapProvider) {
             color: Colors.blue,
             width: 5,
           );
-          
+
           // Add polyline to map
           setState(() {
             _polylines = {polyline};
           });
-          
+
           // Also add to map provider
           mapProvider.setPolyline(polyline);
         } else {
@@ -299,15 +304,15 @@ void _clearMapResources(MapProvider? mapProvider) {
             color: Colors.blue,
             width: 5,
           );
-          
+
           setState(() {
             _polylines = {polyline};
           });
-          
+
           mapProvider.setPolyline(polyline);
         }
       }
-      
+
       // Animate camera to show the entire route
       final bounds = LatLngBounds(
         southwest: LatLng(
@@ -319,14 +324,14 @@ void _clearMapResources(MapProvider? mapProvider) {
           max(pickupLatLng.longitude, dropoffLatLng.longitude) + 0.01,
         ),
       );
-      
+
       // Animate to bounds with padding
       mapProvider.animateToLatLngBounds(bounds, 50);
     } catch (e) {
       print('Error showing completed trip route: $e');
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Consumer<MapProvider>(
@@ -337,24 +342,23 @@ void _clearMapResources(MapProvider? mapProvider) {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(
-                  color: Colors.amber,
-                ),
+                CircularProgressIndicator(color: Colors.amber),
                 SizedBox(height: 16),
                 Text('Loading location...'),
               ],
             ),
           );
         }
-        
+
         // Show overlay loading indicator for other loading operations
         return Stack(
           children: [
             // The map
             GoogleMap(
               initialCameraPosition: CameraPosition(
-                target: mapProvider.pickupLocation?.coordinates ?? 
-                      mapProvider.currentUserLocation,
+                target:
+                    mapProvider.pickupLocation?.coordinates ??
+                    mapProvider.currentUserLocation,
                 zoom: 14.0,
               ),
               onMapCreated: (GoogleMapController controller) {
@@ -362,23 +366,30 @@ void _clearMapResources(MapProvider? mapProvider) {
               },
               markers: mapProvider.markers,
               polylines: mapProvider.polylines.union(_polylines),
-              myLocationEnabled: true, 
-              myLocationButtonEnabled: false, // Set to false to use custom button
+              myLocationEnabled: true,
+              myLocationButtonEnabled:
+                  false, // Set to false to use custom button
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
               compassEnabled: true,
-              onTap: widget.allowMapTaps ? (LatLng position) {
-                // Handle map taps differently based on selection mode
-                if (widget.isPickupSelection) {
-                  mapProvider.setPickupLocationFromMap(position);
-                } else if (widget.stopIndex >= 0) {
-                  mapProvider.setStopLocationFromMap(position, widget.stopIndex);
-                } else {
-                  mapProvider.setDropoffLocationFromMap(position);
-                }
-              } : null,
+              onTap:
+                  widget.allowMapTaps
+                      ? (LatLng position) {
+                        // Handle map taps differently based on selection mode
+                        if (widget.isPickupSelection) {
+                          mapProvider.setPickupLocationFromMap(position);
+                        } else if (widget.stopIndex >= 0) {
+                          mapProvider.setStopLocationFromMap(
+                            position,
+                            widget.stopIndex,
+                          );
+                        } else {
+                          mapProvider.setDropoffLocationFromMap(position);
+                        }
+                      }
+                      : null,
             ),
-            
+
             // Custom current location button with loading indicator
             // Positioned(
             //   right: 10,
@@ -386,7 +397,7 @@ void _clearMapResources(MapProvider? mapProvider) {
             //   child: FloatingActionButton(
             //     mini: true,
             //     backgroundColor: const Color.fromARGB(255, 255, 193, 0),
-            //     onPressed: mapProvider.isLoading 
+            //     onPressed: mapProvider.isLoading
             //         ? null // Disable when loading
             //         : () => mapProvider.moveToCurrentLocation(),
             //     child: mapProvider.isLoading
@@ -404,7 +415,7 @@ void _clearMapResources(MapProvider? mapProvider) {
             //           ),
             //   ),
             // ),
-            
+
             // Overlay loading indicator for other operations
             if (mapProvider.isLoading && !mapProvider.isInitializing)
               const Positioned(
@@ -427,7 +438,10 @@ void _clearMapResources(MapProvider? mapProvider) {
                           ),
                         ),
                         SizedBox(width: 8),
-                        Text("Updating location...", style: TextStyle(fontSize: 12)),
+                        Text(
+                          "Updating location...",
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ],
                     ),
                   ),

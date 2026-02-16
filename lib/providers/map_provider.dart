@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart'; // Add this import
+import 'package:flutter/scheduler.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import '../models/location_model.dart';
 import 'package:http/http.dart' as http;
@@ -29,7 +30,7 @@ class MapProvider extends ChangeNotifier {
   final Set<Polyline> _polylines = {};
   double _estimatedFare = 0.0;
   String _currentUserAddress = "";
-    // Add this property near other class properties
+  // Add this property near other class properties
   bool _hasCustomPickupLocation = false;
   bool get hasCustomPickupLocation => _hasCustomPickupLocation;
   // Add storage for stops with wait time
@@ -60,6 +61,7 @@ class MapProvider extends ChangeNotifier {
 
     return result;
   }
+
   Set<Polyline> get polylines => _polylines;
   GoogleMapController? get mapController => _mapController;
   LocationModel? get pickupLocation => _pickupLocation;
@@ -108,52 +110,62 @@ class MapProvider extends ChangeNotifier {
     super.dispose();
   }
 
-  // Initialize user location
+  // Initialize user location with timeout and fallback using geolocator
   Future<void> initializeUserLocation() async {
     _isInitializing = true;
     _isLoading = true;
     _safeNotifyListeners();
 
     try {
-      Location location = Location();
-      bool serviceEnabled;
-      PermissionStatus permissionGranted;
+      print('🗺️ Initializing user location...');
 
-      // Check if location service is enabled
-      serviceEnabled = await location.serviceEnabled();
+      // STEP 1: Check if location service is enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        serviceEnabled = await location.requestService();
-        if (!serviceEnabled) {
-          // If service is not available, use default location
+        print('🗺️ Location service disabled, using default location');
+        await setDefaultLocation();
+        return;
+      }
+
+      // STEP 2: Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        print('🗺️ Location permission denied, requesting...');
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          print('🗺️ Location permission not granted, using default location');
           await setDefaultLocation();
           return;
         }
       }
 
-      // Check location permissions
-      permissionGranted = await location.hasPermission();
-      if (permissionGranted == PermissionStatus.denied) {
-        permissionGranted = await location.requestPermission();
-        if (permissionGranted != PermissionStatus.granted) {
-          // If permission is denied, use default location
-          await setDefaultLocation();
-          return;
-        }
+      if (permission == LocationPermission.deniedForever) {
+        print(
+          '🗺️ Location permissions permanently denied, using default location',
+        );
+        await setDefaultLocation();
+        return;
       }
 
+      // STEP 3: Get current location with TIMEOUT (10 seconds)
       try {
-        // Attempt to get current location with a timeout
-        LocationData locationData = await location.getLocation()
-            .timeout(const Duration(seconds: 10));
-        
-        _currentUserLocation = LatLng(
-          locationData.latitude!, 
-          locationData.longitude!
+        print('🗺️ Getting current location with 10s timeout...');
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+
+        _currentUserLocation = LatLng(position.latitude, position.longitude);
+
+        print(
+          '🗺️ Current location obtained: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
         );
 
         // Get address from coordinates
-        _currentUserAddress = await _getAddressFromCoordinates(_currentUserLocation);
-        
+        _currentUserAddress = await _getAddressFromCoordinates(
+          _currentUserLocation,
+        );
+
         // Update flag
         _hasInitializedLocation = true;
 
@@ -173,13 +185,25 @@ class MapProvider extends ChangeNotifier {
         if (_dropoffLocation != null) {
           _updateRoute();
         }
-      } catch (e) {
-        print('Error getting current location: $e');
+      } on TimeoutException catch (e) {
+        // ⚡ CRITICAL: Timeout fallback - try to get last known location
+        print('🗺️ Location timeout: $e - trying last known position...');
+        await _tryLastKnownLocation();
+      } on LocationServiceDisabledException {
+        print('🗺️ Location services are disabled');
         await setDefaultLocation();
-        return;
+      } on PermissionDeniedException {
+        print('🗺️ Location permissions denied');
+        await setDefaultLocation();
+      } catch (e) {
+        // ⚡ CRITICAL: Generic error fallback
+        print(
+          '🗺️ Error getting current location: $e - trying last known position...',
+        );
+        await _tryLastKnownLocation();
       }
     } catch (e) {
-      print('Error initializing user location: $e');
+      print('🗺️ Error initializing user location: $e');
       await setDefaultLocation();
     } finally {
       _isInitializing = false;
@@ -187,51 +211,97 @@ class MapProvider extends ChangeNotifier {
       _safeNotifyListeners();
     }
   }
-  // Update setDefaultLocation method
-Future<void> setDefaultLocation() async {
-  try {
-    // Set default location to Beirut, Lebanon
-    _currentUserLocation = const LatLng(33.8938, 35.5018);
-    _currentUserAddress = "Beirut, Lebanon";
-    
-    // Update the flag
-    _hasInitializedLocation = true;
 
-    // Only set Beirut as pickup if no custom location is set
-    if (!_hasCustomPickupLocation && _pickupLocation == null) {
-      _pickupLocation = LocationModel(
-        placeId: 'default_location',
-        address: _currentUserAddress,
-        coordinates: _currentUserLocation,
-        name: 'Beirut',
-      );
-    }
+  // Fallback to last known position using geolocator
+  Future<void> _tryLastKnownLocation() async {
+    try {
+      print('🗺️ Attempting to get last known location...');
+      Position? lastKnown = await Geolocator.getLastKnownPosition();
 
-    _updateMarkers();
-    
-    if (_dropoffLocation != null) {
-      _updateRoute();
+      if (lastKnown != null) {
+        _currentUserLocation = LatLng(lastKnown.latitude, lastKnown.longitude);
+
+        print(
+          '🗺️ Using last known position: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
+        );
+
+        _currentUserAddress = await _getAddressFromCoordinates(
+          _currentUserLocation,
+        );
+        _hasInitializedLocation = true;
+
+        if (!_hasCustomPickupLocation && _pickupLocation == null) {
+          _pickupLocation = LocationModel(
+            placeId: 'current_location',
+            address: _currentUserAddress,
+            coordinates: _currentUserLocation,
+            name: 'Current Location',
+          );
+        }
+
+        _updateMarkers();
+        if (_dropoffLocation != null) {
+          _updateRoute();
+        }
+      } else {
+        print('🗺️ No last known position available, using default');
+        await setDefaultLocation();
+      }
+    } catch (e) {
+      print('🗺️ Could not get last known position: $e, using default');
+      await setDefaultLocation();
     }
-  } catch (e) {
-    print('Error setting default location: $e');
-  } finally {
-    _isInitializing = false;
-    _isLoading = false;
-    _safeNotifyListeners();
   }
-}
+
+  // Update setDefaultLocation method
+  Future<void> setDefaultLocation() async {
+    try {
+      // Set default location to Beirut, Lebanon
+      _currentUserLocation = const LatLng(33.8938, 35.5018);
+      _currentUserAddress = "Beirut, Lebanon";
+
+      // Update the flag
+      _hasInitializedLocation = true;
+
+      // Only set Beirut as pickup if no custom location is set
+      if (!_hasCustomPickupLocation && _pickupLocation == null) {
+        _pickupLocation = LocationModel(
+          placeId: 'default_location',
+          address: _currentUserAddress,
+          coordinates: _currentUserLocation,
+          name: 'Beirut',
+        );
+      }
+
+      _updateMarkers();
+
+      if (_dropoffLocation != null) {
+        _updateRoute();
+      }
+    } catch (e) {
+      print('Error setting default location: $e');
+    } finally {
+      _isInitializing = false;
+      _isLoading = false;
+      _safeNotifyListeners();
+    }
+  }
+
   // Set map controller
   void setMapController(GoogleMapController controller) {
     _mapController = controller;
-    
+
     // Use post-frame callback to avoid calling during build
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (_hasInitializedLocation && !_isInitializing && _mapController != null) {
+      if (_hasInitializedLocation &&
+          !_isInitializing &&
+          _mapController != null) {
         // If we have a custom pickup location, use that
-        LatLng cameraTarget = _hasCustomPickupLocation && _pickupLocation != null
-            ? _pickupLocation!.coordinates
-            : _currentUserLocation;
-        
+        LatLng cameraTarget =
+            _hasCustomPickupLocation && _pickupLocation != null
+                ? _pickupLocation!.coordinates
+                : _currentUserLocation;
+
         _mapController!.animateCamera(
           CameraUpdate.newLatLngZoom(cameraTarget, 15),
         );
@@ -272,19 +342,56 @@ Future<void> setDefaultLocation() async {
     }
   }
 
-  // Add this new method after setCurrentLocationAsPickup
+  // Reset pickup to current location with timeout and fallback using geolocator
   Future<void> resetPickupToCurrentLocation() async {
     _isLoading = true;
     _safeNotifyListeners();
 
     try {
-      // Re-fetch the current location to make sure it's up to date
-      Location location = Location();
-      LocationData locationData = await location.getLocation();
-      _currentUserLocation = LatLng(locationData.latitude!, locationData.longitude!);
+      print('🗺️ Resetting pickup to current location...');
+
+      try {
+        // STEP 1: Get current location with TIMEOUT (10 seconds)
+        print('🗺️ Getting fresh location with 10s timeout...');
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+
+        _currentUserLocation = LatLng(position.latitude, position.longitude);
+
+        print(
+          '🗺️ Fresh location obtained: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
+        );
+      } on TimeoutException catch (e) {
+        // ⚡ CRITICAL: Timeout fallback
+        print('🗺️ Location timeout: $e - trying last known position...');
+        Position? lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          _currentUserLocation = LatLng(
+            lastKnown.latitude,
+            lastKnown.longitude,
+          );
+          print(
+            '🗺️ Using last known position: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
+          );
+        } else {
+          print('🗺️ No last known position, using existing location');
+        }
+      } on LocationServiceDisabledException {
+        print('🗺️ Location services are disabled, using existing location');
+      } on PermissionDeniedException {
+        print('🗺️ Location permissions denied, using existing location');
+      } catch (e) {
+        // ⚡ CRITICAL: Generic error fallback
+        print('🗺️ Error getting location: $e - using existing location');
+        // Continue with existing _currentUserLocation
+      }
 
       // Update the address for the current location
-      await _getAddressFromCoordinates(_currentUserLocation);
+      _currentUserAddress = await _getAddressFromCoordinates(
+        _currentUserLocation,
+      );
 
       // Set pickup location to current location
       _pickupLocation = LocationModel(
@@ -304,7 +411,7 @@ Future<void> setDefaultLocation() async {
         );
       }
     } catch (e) {
-      print('Error resetting pickup to current location: $e');
+      print('🗺️ Error resetting pickup to current location: $e');
     } finally {
       _isLoading = false;
       _safeNotifyListeners();
@@ -363,7 +470,11 @@ Future<void> setDefaultLocation() async {
   }
 
   // Add a new stop with location and waiting time
-  void addStop({LocationModel? location, String address = '', int waitingTime = 0}) {
+  void addStop({
+    LocationModel? location,
+    String address = '',
+    int waitingTime = 0,
+  }) {
     _stops.add({
       'location': location,
       'address': address,
@@ -376,7 +487,12 @@ Future<void> setDefaultLocation() async {
   }
 
   // Update an existing stop
-  void updateStop(int index, {LocationModel? location, String? address, int? waitingTime}) {
+  void updateStop(
+    int index, {
+    LocationModel? location,
+    String? address,
+    int? waitingTime,
+  }) {
     if (index >= 0 && index < _stops.length) {
       if (location != null) {
         _stops[index]['location'] = location;
@@ -420,10 +536,12 @@ Future<void> setDefaultLocation() async {
     _updateRoute();
     _safeNotifyListeners();
   }
+
   // Add this method to reset the custom pickup flag
-void clearCustomPickupFlag() {
-  _hasCustomPickupLocation = false;
-}
+  void clearCustomPickupFlag() {
+    _hasCustomPickupLocation = false;
+  }
+
   // Clear dropoff location
   void clearDropoffLocation() {
     _dropoffLocation = null;
@@ -448,8 +566,8 @@ void clearCustomPickupFlag() {
         coordinates: latLng,
         name: 'Selected Pickup',
       );
-       // Set custom pickup flag
-    _hasCustomPickupLocation = true;
+      // Set custom pickup flag
+      _hasCustomPickupLocation = true;
 
       _updateMarkers();
       _updateRoute();
@@ -547,8 +665,13 @@ void clearCustomPickupFlag() {
         Marker(
           markerId: const MarkerId('pickup'),
           position: _pickupLocation!.coordinates,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: InfoWindow(title: 'Pickup', snippet: _pickupLocation!.address),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+          infoWindow: InfoWindow(
+            title: 'Pickup',
+            snippet: _pickupLocation!.address,
+          ),
         ),
       );
     }
@@ -561,8 +684,13 @@ void clearCustomPickupFlag() {
           Marker(
             markerId: MarkerId('stop_$i'),
             position: location.coordinates,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-            infoWindow: InfoWindow(title: 'Stop ${i + 1}', snippet: location.address),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueOrange,
+            ),
+            infoWindow: InfoWindow(
+              title: 'Stop ${i + 1}',
+              snippet: location.address,
+            ),
           ),
         );
       }
@@ -575,7 +703,10 @@ void clearCustomPickupFlag() {
           markerId: const MarkerId('dropoff'),
           position: _dropoffLocation!.coordinates,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(title: 'Dropoff', snippet: _dropoffLocation!.address),
+          infoWindow: InfoWindow(
+            title: 'Dropoff',
+            snippet: _dropoffLocation!.address,
+          ),
         ),
       );
     }
@@ -611,30 +742,42 @@ void clearCustomPickupFlag() {
       int totalDurationMinutes = 0;
 
       // Process routes: pickup -> stop1 -> stop2 -> ... -> dropoff
-      List<LocationModel> allPoints = [_pickupLocation!, ...waypoints, _dropoffLocation!];
+      List<LocationModel> allPoints = [
+        _pickupLocation!,
+        ...waypoints,
+        _dropoffLocation!,
+      ];
 
       for (int i = 0; i < allPoints.length - 1; i++) {
         final nextPoint = allPoints[i + 1].coordinates;
 
         // Calculate route for this segment
-        List<LatLng> segmentPoints = await _getDirectionsPolyline(currentPoint, nextPoint);
+        List<LatLng> segmentPoints = await _getDirectionsPolyline(
+          currentPoint,
+          nextPoint,
+        );
 
         // Calculate segment distance
         double segmentDistance = _calculateDistance(
-          currentPoint.latitude, currentPoint.longitude,
-          nextPoint.latitude, nextPoint.longitude
+          currentPoint.latitude,
+          currentPoint.longitude,
+          nextPoint.latitude,
+          nextPoint.longitude,
         );
         totalDistance += segmentDistance;
 
         // Calculate segment duration (simplified, replace with actual API data if available)
-        int segmentDuration = (segmentDistance / 0.5).round(); // Assume 0.5 km/min average speed
+        int segmentDuration =
+            (segmentDistance / 0.5).round(); // Assume 0.5 km/min average speed
         totalDurationMinutes += segmentDuration;
 
         // Add segment to overall route
         if (i == 0) {
           allRoutePoints.addAll(segmentPoints);
         } else {
-          allRoutePoints.addAll(segmentPoints.sublist(1)); // Avoid duplicating connecting points
+          allRoutePoints.addAll(
+            segmentPoints.sublist(1),
+          ); // Avoid duplicating connecting points
         }
 
         // Add polyline for this segment
@@ -678,16 +821,22 @@ void clearCustomPickupFlag() {
   }
 
   // Helper function to get directions polyline between two points
-  Future<List<LatLng>> _getDirectionsPolyline(LatLng origin, LatLng destination) async {
+  Future<List<LatLng>> _getDirectionsPolyline(
+    LatLng origin,
+    LatLng destination,
+  ) async {
     List<LatLng> polylineCoordinates = [];
 
     try {
       // This is a simplified implementation. In a real app, you'd use your API key.
-      String apiKey = "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
+      String apiKey =
+          "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
 
       // Prepare the URL for the API request
-      final String baseUrl = 'https://maps.googleapis.com/maps/api/directions/json';
-      final String url = '$baseUrl?origin=${origin.latitude},${origin.longitude}'
+      final String baseUrl =
+          'https://maps.googleapis.com/maps/api/directions/json';
+      final String url =
+          '$baseUrl?origin=${origin.latitude},${origin.longitude}'
           '&destination=${destination.latitude},${destination.longitude}'
           '&mode=driving'
           '&key=$apiKey';
@@ -705,12 +854,14 @@ void clearCustomPickupFlag() {
 
           // Decode the polyline
           PolylinePoints polylinePoints = PolylinePoints();
-          List<PointLatLng> decodedPolylinePoints = polylinePoints.decodePolyline(points);
+          List<PointLatLng> decodedPolylinePoints = polylinePoints
+              .decodePolyline(points);
 
           // Convert to LatLng coordinates
-          polylineCoordinates = decodedPolylinePoints
-              .map((point) => LatLng(point.latitude, point.longitude))
-              .toList();
+          polylineCoordinates =
+              decodedPolylinePoints
+                  .map((point) => LatLng(point.latitude, point.longitude))
+                  .toList();
         } else {
           // Fallback: direct line between points if API fails
           polylineCoordinates = [origin, destination];
@@ -732,8 +883,10 @@ void clearCustomPickupFlag() {
   Future<String> _getAddressFromCoordinates(LatLng coordinates) async {
     try {
       // This is a simplified implementation. In a real app, you'd use your API key.
-      String apiKey = "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
-      final url = 'https://maps.googleapis.com/maps/api/geocode/json'
+      String apiKey =
+          "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
+      final url =
+          'https://maps.googleapis.com/maps/api/geocode/json'
           '?latlng=${coordinates.latitude},${coordinates.longitude}'
           '&key=$apiKey';
 
@@ -764,18 +917,22 @@ void clearCustomPickupFlag() {
   }
 
   // Helper function to calculate distance between two points in km
-  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
     const double earthRadius = 6371; // in km
 
     double dLat = _toRadians(lat2 - lat1);
     double dLon = _toRadians(lon1 - lon2);
 
-    double a = (
-      (dLat / 2).sin().pow(2) +
-      (lat1).toRadians().cos() *
-      (lat2).toRadians().cos() *
-      (dLon / 2).sin().pow(2)
-    );
+    double a =
+        ((dLat / 2).sin().pow(2) +
+            (lat1).toRadians().cos() *
+                (lat2).toRadians().cos() *
+                (dLon / 2).sin().pow(2));
 
     double c = 2 * a.sqrt().asin();
     double distance = earthRadius * c;
@@ -809,24 +966,29 @@ void clearCustomPickupFlag() {
   }
 
   // Add this method to your MapProvider class
-  double calculateAdditionalCharges(double stopCharge, double waitingChargePerMinute) {
+  double calculateAdditionalCharges(
+    double stopCharge,
+    double waitingChargePerMinute,
+  ) {
     double additionalCharge = 0;
-    
+
     // Charge for each stop
     additionalCharge += _stops.length * stopCharge;
-    
+
     // Charge for waiting time
     for (var stop in _stops) {
       additionalCharge += (stop['waitingTime'] ?? 0) * waitingChargePerMinute;
     }
-    
+
     return additionalCharge;
   }
 
   // Animate camera to bounds
   void animateToLatLngBounds(LatLngBounds bounds, double padding) {
     if (_mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, padding));
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngBounds(bounds, padding),
+      );
     }
   }
 
@@ -836,7 +998,7 @@ void clearCustomPickupFlag() {
     _markers.add(driverMarker);
     _safeNotifyListeners();
   }
-  
+
   // Remove driver marker from the markers set
   void removeDriverLocation() {
     _markers.removeWhere((marker) => marker.markerId.value == 'driver');
@@ -849,18 +1011,18 @@ void clearCustomPickupFlag() {
     _tripMarkers.add(marker);
     _safeNotifyListeners();
   }
-  
+
   void clearTripMarkers() {
     _tripMarkers.clear();
     _safeNotifyListeners();
   }
-  
+
   void setPolyline(Polyline polyline) {
     _polylines.clear();
     _polylines.add(polyline);
     _safeNotifyListeners();
   }
-  
+
   void clearPolylines() {
     _polylines.clear();
     _safeNotifyListeners();
@@ -872,15 +1034,15 @@ void clearCustomPickupFlag() {
     _markers.clear();
     _tripMarkers.clear();
     // _driverMarker = null;
-    
+
     // Clear all polylines
     _polylines.clear();
-    
+
     // Reset any active selections or routes
     // _selectedPickupLocation = null;
     // _selectedDropoffLocation = null;
     // _routeInfo = null;
-    
+
     // Notify listeners about these changes
     // notifyListeners();
   }
@@ -893,47 +1055,67 @@ void clearCustomPickupFlag() {
     }
   }
 
-  // Add this method to handle current location button clicks
-Future<void> moveToCurrentLocation() async {
-  // Set loading state
-  _isLoading = true;
-  _safeNotifyListeners();
-
-  try {
-    // Try to get fresh location data
-    Location location = Location();
-    LocationData? locationData;
-    
-    try {
-      // Try to get current location with timeout
-      locationData = await location.getLocation().timeout(const Duration(seconds: 10));
-      
-      // Update current location
-      _currentUserLocation = LatLng(
-        locationData.latitude!, 
-        locationData.longitude!
-      );
-
-      // Get address from coordinates
-      _currentUserAddress = await _getAddressFromCoordinates(_currentUserLocation);
-    } catch (e) {
-      print('Error getting current location: $e');
-      // Continue with existing location data if we can't get a fresh location
-    }
-
-    // If we have a map controller, animate to the current location
-    if (_mapController != null) {
-      await _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentUserLocation, 15),
-      );
-    }
-  } catch (e) {
-    print('Error moving to current location: $e');
-  } finally {
-    _isLoading = false;
+  // Move to current location using geolocator
+  Future<void> moveToCurrentLocation() async {
+    // Set loading state
+    _isLoading = true;
     _safeNotifyListeners();
+
+    try {
+      print('🗺️ Moving to current location...');
+
+      try {
+        // Try to get current location with timeout
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+
+        // Update current location
+        _currentUserLocation = LatLng(position.latitude, position.longitude);
+
+        // Get address from coordinates
+        _currentUserAddress = await _getAddressFromCoordinates(
+          _currentUserLocation,
+        );
+
+        print(
+          '🗺️ Location obtained: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
+        );
+      } on TimeoutException catch (e) {
+        print('🗺️ Location timeout: $e - trying last known position...');
+        Position? lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          _currentUserLocation = LatLng(
+            lastKnown.latitude,
+            lastKnown.longitude,
+          );
+          _currentUserAddress = await _getAddressFromCoordinates(
+            _currentUserLocation,
+          );
+        }
+      } on LocationServiceDisabledException {
+        print('🗺️ Location services are disabled');
+      } on PermissionDeniedException {
+        print('🗺️ Location permissions denied');
+      } catch (e) {
+        print('🗺️ Error getting current location: $e');
+        // Continue with existing location data if we can't get a fresh location
+      }
+
+      // If we have a map controller, animate to the current location
+      if (_mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(_currentUserLocation, 15),
+        );
+      }
+    } catch (e) {
+      print('🗺️ Error moving to current location: $e');
+    } finally {
+      _isLoading = false;
+      _safeNotifyListeners();
+    }
   }
-}
 }
 
 // Extensions for math operations

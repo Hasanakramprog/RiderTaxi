@@ -97,6 +97,61 @@ class _TripRequestScreenState extends State<TripRequestScreen>
     super.dispose();
   }
 
+  // Helper method to show map selection mode
+  void _showMapSelectionMode({required bool isPickup, int stopIndex = -1}) {
+    setState(() {
+      _isMapSelectionMode = true;
+      _showFullMap = true;
+      _isPickupSelection = isPickup;
+      _currentStopIndex = stopIndex;
+    });
+  }
+
+  // Add a new stop
+  void _addStop() {
+    final mapProvider = Provider.of<MapProvider>(context, listen: false);
+
+    if (mapProvider.mapController != null) {
+      mapProvider.addStop();
+
+      // Show map selection for the new stop after a short delay
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _showMapSelectionMode(
+          isPickup: false,
+          stopIndex: mapProvider.stops.length - 1,
+        );
+      });
+    } else {
+      mapProvider.addStop();
+    }
+  }
+
+  // Remove a stop
+  void _removeStop(int index) {
+    final mapProvider = Provider.of<MapProvider>(context, listen: false);
+    mapProvider.removeStop(index);
+  }
+
+  // Update waiting time for a stop
+  void _updateWaitingTime(int index, int minutes) {
+    final mapProvider = Provider.of<MapProvider>(context, listen: false);
+    mapProvider.updateStop(index, waitingTime: minutes);
+  }
+
+  // Clear all locations and stops
+  void _clearAll() {
+    final mapProvider = Provider.of<MapProvider>(context, listen: false);
+
+    // IMPORTANT: Clear locations FIRST before stops
+    // If we clear stops first, _updateRoute() is called while pickup/dropoff still exist,
+    // which causes the route to be redrawn without stops
+    mapProvider.clearPickupLocation();
+    mapProvider.clearDropoffLocation();
+
+    // Now clear stops (won't redraw route since locations are already null)
+    mapProvider.clearStops();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,7 +165,11 @@ class _TripRequestScreenState extends State<TripRequestScreen>
         ),
         title: Text(
           _isMapSelectionMode
-              ? 'Select ${_isPickupSelection ? 'Pickup' : 'Dropoff'} Location'
+              ? 'Select ${_isPickupSelection
+                  ? 'Pickup'
+                  : _currentStopIndex >= 0
+                  ? 'Stop #${_currentStopIndex + 1}'
+                  : 'Dropoff'} Location'
               : 'Book Your Ride',
           style: const TextStyle(
             color: Colors.white,
@@ -251,7 +310,7 @@ class _TripRequestScreenState extends State<TripRequestScreen>
                             Provider.of<MapProvider>(
                               context,
                               listen: false,
-                            ).moveToCurrentLocation();
+                            ).setCurrentLocationAsPickup();
                           },
                         ),
                     ],
@@ -290,12 +349,27 @@ class _TripRequestScreenState extends State<TripRequestScreen>
                           const SizedBox(height: 12),
                           Consumer<MapProvider>(
                             builder: (context, mapProvider, _) {
-                              final address =
-                                  _isPickupSelection
-                                      ? mapProvider.pickupLocation?.address ??
-                                          ''
-                                      : mapProvider.dropoffLocation?.address ??
-                                          '';
+                              String address;
+
+                              if (_isPickupSelection) {
+                                address =
+                                    mapProvider.pickupLocation?.address ?? '';
+                              } else if (_currentStopIndex >= 0) {
+                                // Selecting a stop
+                                if (_currentStopIndex <
+                                    mapProvider.stops.length) {
+                                  address =
+                                      mapProvider
+                                          .stops[_currentStopIndex]['address'] ??
+                                      '';
+                                } else {
+                                  address = '';
+                                }
+                              } else {
+                                // Selecting dropoff
+                                address =
+                                    mapProvider.dropoffLocation?.address ?? '';
+                              }
 
                               return Text(
                                 address.isEmpty
@@ -442,26 +516,47 @@ class _TripRequestScreenState extends State<TripRequestScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFC107).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.location_on,
-                  color: Color(0xFFFFC107),
-                  size: 20,
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFC107).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.location_on,
+                      color: Color(0xFFFFC107),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Trip Details',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              const Text(
-                'Trip Details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+              // Clear All Button
+              TextButton.icon(
+                onPressed: _clearAll,
+                icon: const Icon(Icons.clear_all, size: 18),
+                label: const Text(
+                  'Clear All',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade600,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
               ),
             ],
@@ -474,6 +569,47 @@ class _TripRequestScreenState extends State<TripRequestScreen>
             iconColor: Colors.green,
             label: 'Pickup',
             isPickup: true,
+          ),
+
+          // Stops Section
+          Consumer<MapProvider>(
+            builder: (context, mapProvider, _) {
+              return Column(
+                children: List.generate(mapProvider.stops.length, (index) {
+                  final stop = mapProvider.stops[index];
+
+                  return Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildStopField(index, stop),
+                    ],
+                  );
+                }),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // Add Stop Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _addStop,
+              icon: const Icon(Icons.add_location_alt, size: 20),
+              label: const Text(
+                'Add Stop',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFFFC107),
+                side: const BorderSide(color: Color(0xFFFFC107), width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ),
 
           const SizedBox(height: 16),
@@ -517,6 +653,8 @@ class _TripRequestScreenState extends State<TripRequestScreen>
                 setState(() {
                   _isMapSelectionMode = true;
                   _isPickupSelection = isPickup;
+                  _currentStopIndex =
+                      -1; // Reset stop index for pickup/dropoff selection
                 });
               },
               child: Padding(
@@ -576,6 +714,193 @@ class _TripRequestScreenState extends State<TripRequestScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStopField(int index, Map<String, dynamic> stop) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFC107).withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          // Stop Location Field
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              onTap: () {
+                _showMapSelectionMode(isPickup: false, stopIndex: index);
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Numbered Circle
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFC107),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Stop #${index + 1}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            stop['address']?.isEmpty ?? true
+                                ? 'Tap to select stop location'
+                                : stop['address'],
+                            style: TextStyle(
+                              fontSize: 15,
+                              color:
+                                  stop['address']?.isEmpty ?? true
+                                      ? Colors.grey.shade400
+                                      : Colors.black,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Map Selection Button
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFC107).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.edit_location_alt,
+                        color: Color(0xFFFFC107),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Remove Button
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle, color: Colors.red),
+                      onPressed: () => _removeStop(index),
+                      tooltip: 'Remove Stop',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Waiting Time Selector
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(12),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Wait Time:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: stop['waitingTime'] ?? 0,
+                        isExpanded: true,
+                        icon: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Color(0xFFFFC107),
+                        ),
+                        items:
+                            [0, 5, 10, 15, 20, 30].map((minutes) {
+                              return DropdownMenuItem<int>(
+                                value: minutes,
+                                child: Text(
+                                  minutes == 0 ? 'No Wait' : '$minutes Minutes',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              );
+                            }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            _updateWaitingTime(index, value);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                if ((stop['waitingTime'] ?? 0) > 0) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Text(
+                      '+\$${((stop['waitingTime'] ?? 0) * _waitingChargePerMinute).toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -755,6 +1080,125 @@ class _TripRequestScreenState extends State<TripRequestScreen>
             ],
           ),
           const SizedBox(height: 16),
+
+          // Route Visualization
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Pickup
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.radio_button_checked,
+                      color: Colors.green,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        mapProvider.pickupLocation?.address ?? 'Pickup',
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Stops
+                if (mapProvider.stops.isNotEmpty)
+                  ...List.generate(mapProvider.stops.length, (index) {
+                    final stop = mapProvider.stops[index];
+                    return Column(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(left: 9),
+                          child: Icon(
+                            Icons.more_vert,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 18,
+                              height: 18,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFFC107),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${index + 1}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    stop['address'] ?? 'Stop #${index + 1}',
+                                    style: const TextStyle(fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if ((stop['waitingTime'] ?? 0) > 0)
+                                    Text(
+                                      'Wait ${stop['waitingTime']} min (+\$${(stop['waitingTime'] * _waitingChargePerMinute).toStringAsFixed(2)})',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.green.shade700,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  }),
+
+                // Dropoff
+                if (mapProvider.stops.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 9),
+                    child: Icon(Icons.more_vert, size: 14, color: Colors.grey),
+                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.red, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        mapProvider.dropoffLocation?.address ?? 'Dropoff',
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
           _buildSummaryRow(
             'Distance',
             '${mapProvider.estimatedDistance.toStringAsFixed(1)} km',
@@ -763,7 +1207,28 @@ class _TripRequestScreenState extends State<TripRequestScreen>
           _buildSummaryRow('Duration', '~${mapProvider.estimatedDuration} min'),
           const SizedBox(height: 8),
           _buildSummaryRow('Base Fare', '\$${baseFare.toStringAsFixed(2)}'),
-          if (additionalCharges > 0) ...[
+
+          // Stops Charges
+          if (mapProvider.stops.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              'Stops (${mapProvider.stops.length})',
+              '+\$${(mapProvider.stops.length * _stopCharge).toStringAsFixed(2)}',
+            ),
+          ],
+
+          // Waiting Time Charges
+          if (mapProvider.stops.any(
+            (stop) => (stop['waitingTime'] ?? 0) > 0,
+          )) ...[
+            const SizedBox(height: 8),
+            _buildSummaryRow(
+              'Waiting Time',
+              '+\$${(mapProvider.stops.fold<int>(0, (sum, stop) => sum + (stop['waitingTime'] as int? ?? 0)) * _waitingChargePerMinute).toStringAsFixed(2)}',
+            ),
+          ],
+
+          if (additionalCharges > 0 && mapProvider.stops.isEmpty) ...[
             const SizedBox(height: 8),
             _buildSummaryRow(
               'Additional Charges',

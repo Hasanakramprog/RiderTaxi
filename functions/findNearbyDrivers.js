@@ -39,12 +39,77 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // Distance in km
+}
+
+/**
+ * Calculates driver priority score based on multiple factors.
+ * Higher score = higher priority for trip assignment.
+ *
+ * Scoring breakdown (0-100 points total):
+ * - Distance: 0-50 points (closer = more points)
+ * - Tier Bonus: 0-15 points (Platinum=15, Gold=10, Silver=5, Bronze=0)
+ * - Acceptance Rate: 0-20 points (100% = 20 points)
+ * - User Rating: 0-15 points (5 stars = 15 points)
+ *
+ * @param {object} driver - Driver data including metrics and location.
+ * @param {number} pickupLat - Pickup latitude.
+ * @param {number} pickupLng - Pickup longitude.
+ * @param {number} distance - Pre-calculated distance in km.
+ * @return {object} Driver priority data with score breakdown.
+ */
+function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
+  // 1. Distance Score (0-50 points)
+  // Closer drivers get more points. 10km+ = 0 points
+  const distanceScore = Math.max(0, 50 - (distance * 5));
+
+  // 2. Tier Bonus (0-15 points)
+  const tierBonuses = {
+    "platinum": 15,
+    "gold": 10,
+    "silver": 5,
+    "bronze": 0,
+  };
+  const tier = driver.metrics?.tier || "silver";
+  const tierScore = tierBonuses[tier] || 5;
+
+  // 3. Acceptance Rate Score (0-20 points)
+  // 100% acceptance = 20 points
+  const acceptanceRate = driver.metrics?.acceptanceRate || 0;
+  const acceptanceScore = (acceptanceRate / 100) * 20;
+
+  // 4. User Rating Score (0-15 points)
+  // 5 stars = 15 points
+  const userRating = driver.rating || 0;
+  const ratingScore = (userRating / 5) * 15;
+
+  // Total Priority Score (0-100 points)
+  const totalScore = distanceScore + tierScore + acceptanceScore + ratingScore;
+
+  return {
+    driverId: driver.driverId,
+    distance: distance,
+    tier: tier,
+    acceptanceRate: acceptanceRate,
+    rating: userRating,
+    reliabilityScore: driver.metrics?.reliabilityScore || 0,
+    priorityScore: totalScore,
+    // Score breakdown for debugging
+    scoreBreakdown: {
+      distance: distanceScore.toFixed(1),
+      tier: tierScore,
+      acceptance: acceptanceScore.toFixed(1),
+      rating: ratingScore.toFixed(1),
+      total: totalScore.toFixed(1),
+    },
+    fcmToken: driver.fcmToken,
+    driverName: driver.displayName || "Driver",
+  };
 }
 
 // Helper function to find nearby drivers
@@ -84,8 +149,8 @@ async function findDriversForTrip(tripId, tripData) {
       return null;
     }
 
-    // Calculate distance for each driver and sort by proximity
-    const nearbyDrivers = [];
+    // Calculate distance and priority for each driver
+    const driversWithPriority = [];
 
     driversSnapshot.forEach((doc) => {
       const driverData = doc.data();
@@ -104,22 +169,28 @@ async function findDriversForTrip(tripId, tripData) {
 
         // Only include drivers within the search radius
         if (distance <= searchRadius) {
-          nearbyDrivers.push({
-            driverId,
-            distance,
-            fcmToken: driverData.fcmToken,
-            driverName: driverData.displayName || "Driver",
-          });
+          // Calculate priority score for this driver
+          const driverWithPriority = calculateDriverPriority(
+              {
+                driverId: driverId,
+                ...driverData,
+              },
+              pickupLat,
+              pickupLng,
+              distance,
+          );
+
+          driversWithPriority.push(driverWithPriority);
         }
       }
     });
 
-    // Sort drivers by distance (closest first)
-    nearbyDrivers.sort((a, b) => a.distance - b.distance);
+    // Sort drivers by PRIORITY SCORE (highest first) instead of distance
+    driversWithPriority.sort((a, b) => b.priorityScore - a.priorityScore);
 
-    console.log(`Found ${nearbyDrivers.length} nearby drivers`);
+    console.log(`Found ${driversWithPriority.length} nearby drivers`);
 
-    if (nearbyDrivers.length === 0) {
+    if (driversWithPriority.length === 0) {
       console.log("No drivers within search radius");
       await db.collection("trips").doc(tripId).update({
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -128,20 +199,36 @@ async function findDriversForTrip(tripId, tripData) {
       return null;
     }
 
-    // For now, just send notification to the closest driver
-    // In a production app, you'd implement a queue system
-    const closestDriver = nearbyDrivers[0];
+    // Log top 3 drivers for debugging
+    console.log("Top 3 drivers by priority:");
+    driversWithPriority.slice(0, 3).forEach((driver, index) => {
+      console.log(`${index + 1}. ${driver.driverName} (${driver.tier})`);
+      console.log(`   Priority: ${driver.priorityScore.toFixed(1)} points`);
+      console.log(`   Distance: ${driver.distance.toFixed(2)}km`);
+      console.log(`   Breakdown: ${JSON.stringify(driver.scoreBreakdown)}`);
+    });
 
-    // Store a record of which driver was notified
+    // Select the TOP PRIORITY driver (highest score)
+    const topDriver = driversWithPriority[0];
+
+    // Store a record of which driver was notified with priority info
     await db.collection("trips").doc(tripId).update({
-      nearbyDrivers: nearbyDrivers,
-      notifiedDriverId: closestDriver.driverId,
+      nearbyDrivers: driversWithPriority.map((d) => ({
+        driverId: d.driverId,
+        distance: d.distance,
+        tier: d.tier,
+        priorityScore: d.priorityScore,
+        acceptanceRate: d.acceptanceRate,
+      })),
+      notifiedDriverId: topDriver.driverId,
+      notifiedDriverTier: topDriver.tier,
+      notifiedDriverPriority: topDriver.priorityScore,
       notificationTime: admin.firestore.FieldValue.serverTimestamp(),
       status: "driver_notified",
     });
 
-    // Send push notification to driver
-    if (closestDriver.fcmToken) {
+    // Send push notification to top priority driver
+    if (topDriver.fcmToken) {
       // Prepare message data
       const messageData = {
         tripId: tripId,
@@ -157,8 +244,8 @@ async function findDriversForTrip(tripId, tripData) {
         notificationType: "tripRequest",
         // Add notification time from tripData
         notificationTime: tripData.notificationTime ?
-         tripData.notificationTime.toMillis().toString() :
-        Date.now().toString(),
+          tripData.notificationTime.toMillis().toString() :
+          Date.now().toString(),
       };
       // Add stops information if present
       // eslint-disable-next-line max-len
@@ -177,19 +264,19 @@ async function findDriversForTrip(tripId, tripData) {
           if (stop) {
             // Add address information
             // eslint-disable-next-line max-len
-            messageData[`stop${i+1}Address`] = stop.address || "Unknown stop location";
+            messageData[`stop${i + 1}Address`] = stop.address || "Unknown stop location";
             // Add coordinates if available
             if (stop.latitude && stop.longitude) {
-              messageData[`stop${i+1}Latitude`] = stop.latitude.toString();
-              messageData[`stop${i+1}Longitude`] = stop.longitude.toString();
+              messageData[`stop${i + 1}Latitude`] = stop.latitude.toString();
+              messageData[`stop${i + 1}Longitude`] = stop.longitude.toString();
             }
             // Add waiting time for each stop - important new addition
             if (stop.waitingTime !== undefined) {
               // eslint-disable-next-line max-len
-              messageData[`stop${i+1}WaitingTime`] = stop.waitingTime.toString();
+              messageData[`stop${i + 1}WaitingTime`] = stop.waitingTime.toString();
               totalWaitingTime += parseInt(stop.waitingTime) || 0;
             } else {
-              messageData[`stop${i+1}WaitingTime`] = "0";
+              messageData[`stop${i + 1}WaitingTime`] = "0";
             }
           }
         }
@@ -206,7 +293,7 @@ async function findDriversForTrip(tripId, tripData) {
 
       // Create notification message with additional waiting time info
       // eslint-disable-next-line max-len
-      let notificationBody = `New pickup request (${closestDriver.distance.toFixed(1)}km away)`;
+      let notificationBody = `New pickup request (${topDriver.distance.toFixed(1)}km away)`;
       // Add stops info
       if (tripData.stops && tripData.stops.length > 0) {
         // eslint-disable-next-line max-len
@@ -218,7 +305,7 @@ async function findDriversForTrip(tripId, tripData) {
         }
       }
       const message = {
-        token: closestDriver.fcmToken,
+        token: topDriver.fcmToken,
         notification: {
           title: "New Trip Request",
           body: notificationBody,
@@ -228,7 +315,9 @@ async function findDriversForTrip(tripId, tripData) {
 
       try {
         await fcm.send(message);
-        console.log(`Notification sent to driver ${closestDriver.driverId}`);
+        console.log(`Notification sent to driver ${topDriver.driverId}`);
+        // eslint-disable-next-line max-len
+        console.log(`Driver tier: ${topDriver.tier}, Priority: ${topDriver.priorityScore.toFixed(1)}`);
       } catch (error) {
         console.error("Error sending notification:", error);
       }
@@ -268,6 +357,14 @@ exports.refreshNearbyDriversSearch = onDocumentUpdated("trips/{tripId}", async (
     if (afterData.status !== "searching") {
       return null;
     }
+
+    // IMPORTANT: Don't run on initial trip creation
+    // Only run when searchRefreshedAt is explicitly updated
+    if (!beforeData.searchRefreshedAt && afterData.searchRefreshedAt) {
+      console.log("Skipping refresh - this is initial trip creation");
+      return null;
+    }
+
     // Check if searchRefreshedAt was updated
     if (!afterData.searchRefreshedAt) {
       return null;
