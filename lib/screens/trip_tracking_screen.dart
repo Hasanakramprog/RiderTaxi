@@ -407,6 +407,11 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
           const SnackBar(content: Text('Trip cancelled successfully')),
         );
         
+        // Reset map locations, stops, and markers
+        if (mounted) {
+          Provider.of<MapProvider>(context, listen: false).resetTripData();
+        }
+        
         // Return to home screen
         Navigator.of(context).popUntil((route) => route.isFirst);
       } catch (e) {
@@ -1780,6 +1785,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () {
+                    Provider.of<MapProvider>(context, listen: false).resetTripData();
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
                   child: const Text('BACK TO HOME', style: TextStyle(fontSize: 12)),
@@ -1824,6 +1830,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () {
+              Provider.of<MapProvider>(context, listen: false).resetTripData();
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
             style: ElevatedButton.styleFrom(
@@ -1886,6 +1893,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen> {
             const SizedBox(height: 12),
             TextButton(
               onPressed: () {
+                Provider.of<MapProvider>(context, listen: false).resetTripData();
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               child: const Text('BACK TO HOME'),

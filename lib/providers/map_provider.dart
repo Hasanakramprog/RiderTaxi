@@ -112,104 +112,131 @@ class MapProvider extends ChangeNotifier {
 
   // Initialize user location with timeout and fallback using geolocator
   Future<void> initializeUserLocation() async {
-    _isInitializing = true;
+    // ── FAST START: show the map at Beirut immediately ──────────────────────
+    // Set Beirut as the default so GoogleMap renders at once instead of showing
+    // a spinner while we wait for GPS (which can take 2-10 seconds).
+    if (_pickupLocation == null && !_hasCustomPickupLocation) {
+      _currentUserLocation = const LatLng(33.8938, 35.5018);
+      _currentUserAddress = 'Beirut, Lebanon';
+      _pickupLocation = LocationModel(
+        placeId: 'default_beirut',
+        address: 'Beirut, Lebanon',
+        coordinates: _currentUserLocation,
+        name: 'Beirut',
+      );
+      _hasInitializedLocation = true;
+    }
+    // Mark as no longer initializing → map widget renders NOW
+    _isInitializing = false;
     _isLoading = true;
     _safeNotifyListeners();
+    // ────────────────────────────────────────────────────────────────────────
 
     try {
-      print('🗺️ Initializing user location...');
+      print('🗺️ Refining location in background...');
 
       // STEP 1: Check if location service is enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        print('🗺️ Location service disabled, using default location');
-        await setDefaultLocation();
-        return;
+        print('🗺️ Location service disabled, keeping Beirut default');
+        return; // map is already showing Beirut — nothing more to do
       }
 
       // STEP 2: Check location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        print('🗺️ Location permission denied, requesting...');
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          print('🗺️ Location permission not granted, using default location');
-          await setDefaultLocation();
+          print('🗺️ Location permission denied, keeping Beirut default');
           return;
         }
       }
-
       if (permission == LocationPermission.deniedForever) {
-        print(
-          '🗺️ Location permissions permanently denied, using default location',
-        );
-        await setDefaultLocation();
+        print('🗺️ Location permanently denied, keeping Beirut default');
         return;
       }
 
-      // STEP 3: Get current location with TIMEOUT (10 seconds)
+      // STEP 3: Try last-known position FIRST — it is instant (no GPS spin)
+      Position? lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        print('🗺️ Last known position available — using instantly');
+        _currentUserLocation = LatLng(lastKnown.latitude, lastKnown.longitude);
+        _updatePickupFromCurrentLocation();
+        _updateMarkers();
+        if (_dropoffLocation != null) _updateRoute();
+        _safeNotifyListeners();
+        // Silently update address in background without blocking the map
+        _updateAddressInBackground(_currentUserLocation);
+      }
+
+      // STEP 4: Get fresh GPS fix with a short 5s timeout (not 10s)
+      // This runs after the map is already visible — user sees the map
+      // immediately, and the pin just quietly moves to their exact spot.
       try {
-        print('🗺️ Getting current location with 10s timeout...');
+        print('🗺️ Getting fresh GPS fix (5s timeout)...');
         Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 10),
+          timeLimit: const Duration(seconds: 5),
         );
-
         _currentUserLocation = LatLng(position.latitude, position.longitude);
-
-        print(
-          '🗺️ Current location obtained: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}',
-        );
-
-        // Get address from coordinates
-        _currentUserAddress = await _getAddressFromCoordinates(
-          _currentUserLocation,
-        );
-
-        // Update flag
-        _hasInitializedLocation = true;
-
-        // Only set current location as pickup if no custom location
-        if (!_hasCustomPickupLocation && _pickupLocation == null) {
-          _pickupLocation = LocationModel(
-            placeId: 'current_location',
-            address: _currentUserAddress,
-            coordinates: _currentUserLocation,
-            name: 'Current Location',
-          );
-        }
-
-        // Update markers and route
+        print('🗺️ GPS fix obtained: ${_currentUserLocation.latitude}, ${_currentUserLocation.longitude}');
+        _updatePickupFromCurrentLocation();
         _updateMarkers();
-
-        if (_dropoffLocation != null) {
-          _updateRoute();
-        }
-      } on TimeoutException catch (e) {
-        // ⚡ CRITICAL: Timeout fallback - try to get last known location
-        print('🗺️ Location timeout: $e - trying last known position...');
-        await _tryLastKnownLocation();
+        if (_dropoffLocation != null) _updateRoute();
+        _safeNotifyListeners();
+        // Update address label quietly in background
+        _updateAddressInBackground(_currentUserLocation);
+      } on TimeoutException {
+        print('🗺️ GPS timeout — keeping last known / Beirut default');
       } on LocationServiceDisabledException {
-        print('🗺️ Location services are disabled');
-        await setDefaultLocation();
+        print('🗺️ Location services disabled');
       } on PermissionDeniedException {
-        print('🗺️ Location permissions denied');
-        await setDefaultLocation();
+        print('🗺️ Location permission denied');
       } catch (e) {
-        // ⚡ CRITICAL: Generic error fallback
-        print(
-          '🗺️ Error getting current location: $e - trying last known position...',
-        );
-        await _tryLastKnownLocation();
+        print('🗺️ GPS error: $e');
       }
     } catch (e) {
-      print('🗺️ Error initializing user location: $e');
-      await setDefaultLocation();
+      print('🗺️ Error in background location refinement: $e');
     } finally {
-      _isInitializing = false;
       _isLoading = false;
       _safeNotifyListeners();
     }
+  }
+
+  /// Updates the pickup pin to the current user location (if no custom pickup set).
+  void _updatePickupFromCurrentLocation() {
+    if (!_hasCustomPickupLocation) {
+      _pickupLocation = LocationModel(
+        placeId: 'current_location',
+        address: _currentUserAddress,
+        coordinates: _currentUserLocation,
+        name: 'Current Location',
+      );
+      _hasInitializedLocation = true;
+      // Animate map camera to the refined position
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLng(_currentUserLocation),
+      );
+    }
+  }
+
+  /// Fetches a human-readable address for [coords] in the background
+  /// without blocking the map or the UI.
+  void _updateAddressInBackground(LatLng coords) {
+    _getAddressFromCoordinates(coords).then((address) {
+      _currentUserAddress = address;
+      if (!_hasCustomPickupLocation && _pickupLocation != null) {
+        _pickupLocation = LocationModel(
+          placeId: _pickupLocation!.placeId,
+          address: address,
+          coordinates: coords,
+          name: 'Current Location',
+        );
+      }
+      _safeNotifyListeners();
+    }).catchError((e) {
+      print('🗺️ Background geocoding error: $e');
+    });
   }
 
   // Fallback to last known position using geolocator
@@ -444,6 +471,16 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
+  /// Sets pickup location without camera animation or loading indicator.
+  /// Used by the drag-to-pin UX where the camera is already at the right position.
+  void setPickupLocationSilent(LocationModel location) {
+    _pickupLocation = location;
+    _hasCustomPickupLocation = true;
+    _updateMarkers();
+    _updateRoute();
+    _safeNotifyListeners();
+  }
+
   // Set dropoff location from LocationModel
   Future<void> setDropoffLocation(LocationModel location) async {
     _isLoading = true;
@@ -545,6 +582,25 @@ class MapProvider extends ChangeNotifier {
   // Clear dropoff location
   void clearDropoffLocation() {
     _dropoffLocation = null;
+    _updateMarkers();
+    _updateRoute();
+    _safeNotifyListeners();
+  }
+
+  // Resets pickup location (back to user current location), dropoff, stops, and map markers/polylines
+  void resetTripData() {
+    _pickupLocation = null;
+    _dropoffLocation = null;
+    _hasCustomPickupLocation = false;
+    _stops.clear();
+    _markers.clear();
+    _tripMarkers.clear();
+    _polylines.clear();
+    _estimatedFare = 0.0;
+    _estimatedDistance = 0.0;
+    _estimatedDuration = 0;
+
+    _updatePickupFromCurrentLocation();
     _updateMarkers();
     _updateRoute();
     _safeNotifyListeners();
@@ -825,58 +881,46 @@ class MapProvider extends ChangeNotifier {
     LatLng origin,
     LatLng destination,
   ) async {
-    List<LatLng> polylineCoordinates = [];
+    const String apiKey = 'AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis';
 
     try {
-      // This is a simplified implementation. In a real app, you'd use your API key.
-      String apiKey =
-          "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
+      // ── DEBUG: raw HTTP call to see the EXACT Google API response ──────────
+      final debugUrl = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json'
+        '?origin=${origin.latitude},${origin.longitude}'
+        '&destination=${destination.latitude},${destination.longitude}'
+        '&mode=driving'
+        '&key=$apiKey',
+      );
 
-      // Prepare the URL for the API request
-      final String baseUrl =
-          'https://maps.googleapis.com/maps/api/directions/json';
-      final String url =
-          '$baseUrl?origin=${origin.latitude},${origin.longitude}'
-          '&destination=${destination.latitude},${destination.longitude}'
-          '&mode=driving'
-          '&key=$apiKey';
+      final rawResponse = await http.get(debugUrl);
+      print('🗺️ [DIRECTIONS DEBUG] HTTP status: ${rawResponse.statusCode}');
+      print('🗺️ [DIRECTIONS DEBUG] Response body: ${rawResponse.body}');
+      // ───────────────────────────────────────────────────────────────────────
 
-      // Make the request
-      final response = await http.get(Uri.parse(url));
+      if (rawResponse.statusCode == 200) {
+        final decoded = json.decode(rawResponse.body);
+        final status = decoded['status'] as String? ?? 'UNKNOWN';
 
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-
-        // Check for valid response
-        if (decoded['status'] == 'OK') {
-          // Get the encoded polyline
-          final points = decoded['routes'][0]['overview_polyline']['points'];
-
-          // Decode the polyline
-          PolylinePoints polylinePoints = PolylinePoints();
-          List<PointLatLng> decodedPolylinePoints = polylinePoints
-              .decodePolyline(points);
-
-          // Convert to LatLng coordinates
-          polylineCoordinates =
-              decodedPolylinePoints
-                  .map((point) => LatLng(point.latitude, point.longitude))
-                  .toList();
+        if (status == 'OK') {
+          final points = decoded['routes'][0]['overview_polyline']['points'] as String;
+          final PolylinePoints polylinePoints = PolylinePoints();
+          final List<PointLatLng> decoded2 = polylinePoints.decodePolyline(points);
+          print('🗺️ Route OK — ${decoded2.length} polyline points');
+          return decoded2.map((p) => LatLng(p.latitude, p.longitude)).toList();
         } else {
-          // Fallback: direct line between points if API fails
-          polylineCoordinates = [origin, destination];
+          final errorMsg = decoded['error_message'] ?? '(no error message)';
+          print('🗺️ Directions API status: "$status" — $errorMsg');
+          return [origin, destination]; // straight-line fallback
         }
       } else {
-        // Fallback: direct line between points if request fails
-        polylineCoordinates = [origin, destination];
+        print('🗺️ HTTP error ${rawResponse.statusCode}');
+        return [origin, destination];
       }
     } catch (e) {
-      print('Error getting directions: $e');
-      // Fallback: direct line between points if exception
-      polylineCoordinates = [origin, destination];
+      print('🗺️ Exception in _getDirectionsPolyline: $e');
+      return [origin, destination];
     }
-
-    return polylineCoordinates;
   }
 
   // Helper function to get address from coordinates
@@ -990,6 +1034,30 @@ class MapProvider extends ChangeNotifier {
         CameraUpdate.newLatLngBounds(bounds, padding),
       );
     }
+  }
+
+  /// Silently reverse-geocodes [latLng] to a [LocationModel] without
+  /// triggering global loading state or camera animation.
+  /// Used by the drag-to-pin UX to resolve addresses on camera idle.
+  Future<LocationModel?> reverseGeocodeLatLng(LatLng latLng) async {
+    try {
+      final address = await _getAddressFromCoordinates(latLng);
+      return LocationModel(
+        placeId: 'drag_${latLng.latitude}_${latLng.longitude}',
+        address: address,
+        coordinates: latLng,
+        name: address.split(',').first.trim(),
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Smoothly animates the map camera to [latLng] at the given [zoom].
+  Future<void> animateCameraTo(LatLng latLng, {double zoom = 15.0}) async {
+    await _mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(latLng, zoom),
+    );
   }
 
   // Add/update the driver marker to the markers set

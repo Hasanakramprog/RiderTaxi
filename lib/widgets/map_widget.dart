@@ -10,21 +10,28 @@ class MapWidget extends StatefulWidget {
   final bool allowMapTaps;
   final bool isPickupSelection;
   final int stopIndex; // -1 for pickup/dropoff, 0+ for stops
-  final bool showDriverLocation; // Add this parameter
-  final String? tripId; // Add this parameter
-  // Add these parameters
+  final bool showDriverLocation;
+  final String? tripId;
   final bool showCompletedTrip;
   final Map<String, dynamic>? tripData;
+
+  // Drag-to-pin UX: disable tap-to-set and use camera move/idle instead
+  final bool isDragPinMode;
+  final void Function(LatLng)? onCameraMove;
+  final void Function(LatLng)? onCameraIdle;
 
   const MapWidget({
     Key? key,
     this.allowMapTaps = false,
     this.isPickupSelection = true,
     this.stopIndex = -1,
-    this.showDriverLocation = true, // Default to false
-    this.tripId, // Optional parameter
-    this.showCompletedTrip = false, // Add this parameter
-    this.tripData, // Add this parameter
+    this.showDriverLocation = true,
+    this.tripId,
+    this.showCompletedTrip = false,
+    this.tripData,
+    this.isDragPinMode = false,
+    this.onCameraMove,
+    this.onCameraIdle,
   }) : super(key: key);
 
   @override
@@ -36,8 +43,16 @@ class _MapWidgetState extends State<MapWidget> {
   StreamSubscription<DocumentSnapshot>? _driverSubscription;
   Marker? _driverMarker;
   late MapProvider _mapProvider;
-  // Add a polyline set for routes
   Set<Polyline> _polylines = {};
+
+  // Tracks the last camera center for onCameraIdle callback
+  LatLng? _lastCameraTarget;
+
+  // Guard flag: prevents camera callbacks from firing after dispose.
+  // Switching onCameraMove/onCameraIdle between null and non-null across
+  // rebuilds causes GoogleMapController._connectStreams to crash with a
+  // null check error. We always pass a non-null closure and check this flag.
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -45,7 +60,13 @@ class _MapWidgetState extends State<MapWidget> {
     // Initialize user location when widget is created
     Future.delayed(Duration.zero, () {
       _mapProvider = Provider.of<MapProvider>(context, listen: false);
-      _mapProvider.initializeUserLocation();
+
+      // Guard: only initialize location if it hasn't been done yet.
+      // Prevents re-triggering GPS + new surface buffer allocation every
+      // time AnimatedContainer rebuilds this widget (e.g. fullscreen toggle).
+      if (!_mapProvider.hasInitializedLocation) {
+        _mapProvider.initializeUserLocation();
+      }
 
       // Set up driver tracking if needed
       if (widget.showDriverLocation && widget.tripId != null) {
@@ -84,11 +105,18 @@ class _MapWidgetState extends State<MapWidget> {
 
   @override
   void dispose() {
+    _isDisposed = true;
+
     // Cancel any tracking subscriptions
     _cancelDriverTracking();
 
-    // Clear map resources when widget is disposed
-    // Get MapProvider before widget is disposed
+    // Dispose the GoogleMapController FIRST to release the GL surface buffer.
+    // Without this, the old controller holds onto its ImageReader buffer slot
+    // while the next MapWidget tries to allocate a new one, causing:
+    // W/ImageReader_JNI: Unable to acquire a buffer item
+    _mapProvider.disposeMapController();
+
+    // Then clear markers/polylines
     _clearMapResources(_mapProvider);
 
     super.dispose();
@@ -336,21 +364,9 @@ class _MapWidgetState extends State<MapWidget> {
   Widget build(BuildContext context) {
     return Consumer<MapProvider>(
       builder: (context, mapProvider, _) {
-        // Show loading indicator while location is being initialized
-        if (mapProvider.isInitializing) {
-          return const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: Colors.amber),
-                SizedBox(height: 16),
-                Text('Loading location...'),
-              ],
-            ),
-          );
-        }
-
-        // Show overlay loading indicator for other loading operations
+        // Map renders immediately — no more full-screen blocking spinner.
+        // A small non-intrusive chip is shown while GPS refines the position
+        // in the background. The user can already see and interact with the map.
         return Stack(
           children: [
             // The map
@@ -372,8 +388,25 @@ class _MapWidgetState extends State<MapWidget> {
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
               compassEnabled: true,
+              // Always register non-null callbacks to keep GoogleMapController's
+              // internal stream connections stable. Toggling null/non-null across
+              // rebuilds causes _connectStreams to crash with a null check error.
+              // Instead, we guard the logic inside using _isDisposed + isDragPinMode.
+              onCameraMove: (CameraPosition pos) {
+                if (_isDisposed) return;
+                _lastCameraTarget = pos.target;
+                if (widget.isDragPinMode) {
+                  widget.onCameraMove?.call(pos.target);
+                }
+              },
+              onCameraIdle: () {
+                if (_isDisposed) return;
+                if (widget.isDragPinMode && _lastCameraTarget != null) {
+                  widget.onCameraIdle?.call(_lastCameraTarget!);
+                }
+              },
               onTap:
-                  widget.allowMapTaps
+                  (!widget.isDragPinMode && widget.allowMapTaps)
                       ? (LatLng position) {
                         // Handle map taps differently based on selection mode
                         if (widget.isPickupSelection) {
@@ -416,31 +449,32 @@ class _MapWidgetState extends State<MapWidget> {
             //   ),
             // ),
 
-            // Overlay loading indicator for other operations
-            if (mapProvider.isLoading && !mapProvider.isInitializing)
-              const Positioned(
-                right: 0,
-                bottom: 40,
-                child: Card(
-                  color: Colors.white,
+            // Small non-blocking GPS chip — shown while background GPS resolves
+            if (mapProvider.isLoading)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Material(
                   elevation: 4,
-                  child: Padding(
-                    padding: EdgeInsets.all(8.0),
+                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          height: 20,
-                          width: 20,
+                          height: 12,
+                          width: 12,
                           child: CircularProgressIndicator(
                             color: Colors.amber,
                             strokeWidth: 2,
                           ),
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(width: 6),
                         Text(
-                          "Updating location...",
-                          style: TextStyle(fontSize: 12),
+                          'Locating you...',
+                          style: TextStyle(fontSize: 11, color: Colors.black87),
                         ),
                       ],
                     ),

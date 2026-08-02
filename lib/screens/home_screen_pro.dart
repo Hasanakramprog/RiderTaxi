@@ -428,7 +428,7 @@ class _HomeScreenProState extends State<HomeScreenPro>
                   PageRouteBuilder(
                     pageBuilder:
                         (context, animation, secondaryAnimation) =>
-                            const TripRequestScreen(),
+                            const TripRequestScreenPro(),
                     transitionsBuilder: (
                       context,
                       animation,
