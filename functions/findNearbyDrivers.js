@@ -112,6 +112,81 @@ function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Builds the FCM message payload for a single driver.
+// Extracted so it can be reused in Promise.all() broadcast.
+// eslint-disable-next-line require-jsdoc
+function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
+  const messageData = {
+    tripId: tripId,
+    pickupAddress: tripData.pickup.address || "Unknown location",
+    pickupLatitude: pickupLat.toString(),
+    pickupLongitude: pickupLng.toString(),
+    dropoffAddress: tripData.dropoff.address || "Unknown destination",
+    fare: tripData.fare ? tripData.fare.toString() : "0",
+    distance: tripData.distance ? tripData.distance.toString() : "0",
+    estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
+    expiresIn: "20", // Driver has 20 seconds to respond
+    notificationType: "tripRequest",
+    notificationTime: tripData.notificationTime ?
+      tripData.notificationTime.toMillis().toString() :
+      Date.now().toString(),
+  };
+
+  // Add stops information (up to 5 — FCM has message size limits)
+  if (tripData.stops && Array.isArray(tripData.stops) && tripData.stops.length > 0) {
+    const stopsCount = tripData.stops.length;
+    messageData.hasStops = "true";
+    messageData.stopsCount = stopsCount.toString();
+    let totalWaitingTime = 0;
+    const maxStops = Math.min(stopsCount, 5);
+    for (let i = 0; i < maxStops; i++) {
+      const stop = tripData.stops[i];
+      if (stop) {
+        messageData[`stop${i + 1}Address`] = stop.address || "Unknown stop location";
+        if (stop.latitude && stop.longitude) {
+          messageData[`stop${i + 1}Latitude`] = stop.latitude.toString();
+          messageData[`stop${i + 1}Longitude`] = stop.longitude.toString();
+        }
+        if (stop.waitingTime !== undefined) {
+          messageData[`stop${i + 1}WaitingTime`] = stop.waitingTime.toString();
+          totalWaitingTime += parseInt(stop.waitingTime) || 0;
+        } else {
+          messageData[`stop${i + 1}WaitingTime`] = "0";
+        }
+      }
+    }
+    messageData.totalWaitingTime = totalWaitingTime.toString();
+    if (stopsCount > maxStops) {
+      messageData.additionalStops = (stopsCount - maxStops).toString();
+    }
+  } else {
+    messageData.hasStops = "false";
+    messageData.totalWaitingTime = "0";
+  }
+
+  // Build notification body
+  let notificationBody = `New pickup request (${driver.distance.toFixed(1)}km away)`;
+  if (tripData.stops && tripData.stops.length > 0) {
+    // eslint-disable-next-line max-len
+    notificationBody += ` with ${tripData.stops.length} stop${tripData.stops.length > 1 ? "s" : ""}`;
+    const totalWaitingMinutes = parseInt(messageData.totalWaitingTime) || 0;
+    if (totalWaitingMinutes > 0) {
+      notificationBody += ` (${totalWaitingMinutes} min waiting)`;
+    }
+  }
+
+  return {
+    token: driver.fcmToken,
+    notification: {
+      title: "New Trip Request",
+      body: notificationBody,
+    },
+    data: messageData,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Helper function to find nearby drivers
 // eslint-disable-next-line require-jsdoc
 async function findDriversForTrip(tripId, tripData) {
@@ -199,19 +274,27 @@ async function findDriversForTrip(tripId, tripData) {
       return null;
     }
 
-    // Log top 3 drivers for debugging
-    console.log("Top 3 drivers by priority:");
-    driversWithPriority.slice(0, 3).forEach((driver, index) => {
-      console.log(`${index + 1}. ${driver.driverName} (${driver.tier})`);
-      console.log(`   Priority: ${driver.priorityScore.toFixed(1)} points`);
-      console.log(`   Distance: ${driver.distance.toFixed(2)}km`);
-      console.log(`   Breakdown: ${JSON.stringify(driver.scoreBreakdown)}`);
+    // ── Task 1: Broadcast to top 3 drivers simultaneously ────────────────────
+    const TOP_N = 3;
+    const topDrivers = driversWithPriority.slice(0, TOP_N);
+
+    // Log the drivers being notified
+    console.log(`Broadcasting to ${topDrivers.length} driver(s) simultaneously:`);
+    topDrivers.forEach((driver, index) => {
+      console.log(`  ${index + 1}. ${driver.driverName} (${driver.tier})`);
+      console.log(`     Priority: ${driver.priorityScore.toFixed(1)} pts | Distance: ${driver.distance.toFixed(2)}km`);
+      console.log(`     Breakdown: ${JSON.stringify(driver.scoreBreakdown)}`);
     });
 
-    // Select the TOP PRIORITY driver (highest score)
-    const topDriver = driversWithPriority[0];
-
-    // Store a record of which driver was notified with priority info
+    // ── Write trip document: store all notified drivers + initialize the race lock
+    //
+    // claimedByDriverId starts as null ("door is unlocked").
+    // The driver app must run a Firestore Transaction that:
+    //   1. Reads claimedByDriverId
+    //   2. If null  → sets it to the driver's own ID (claims the trip)
+    //   3. If not null → throws "already claimed" (another driver won the race)
+    // This guarantees exactly one driver gets the trip, even if all 3 tap
+    // Accept at the exact same millisecond.
     await db.collection("trips").doc(tripId).update({
       nearbyDrivers: driversWithPriority.map((d) => ({
         driverId: d.driverId,
@@ -220,108 +303,37 @@ async function findDriversForTrip(tripId, tripData) {
         priorityScore: d.priorityScore,
         acceptanceRate: d.acceptanceRate,
       })),
-      notifiedDriverId: topDriver.driverId,
-      notifiedDriverTier: topDriver.tier,
-      notifiedDriverPriority: topDriver.priorityScore,
+      notifiedDriverIds: topDrivers.map((d) => d.driverId), // array — all 3 notified
+      claimedByDriverId: null,                              // race lock — null = unclaimed
+      notifiedDriverTier: topDrivers[0].tier,
+      notifiedDriverPriority: topDrivers[0].priorityScore,
       notificationTime: admin.firestore.FieldValue.serverTimestamp(),
       status: "driver_notified",
     });
 
-    // Send push notification to top priority driver
-    if (topDriver.fcmToken) {
-      // Prepare message data
-      const messageData = {
-        tripId: tripId,
-        pickupAddress: tripData.pickup.address || "Unknown location",
-        pickupLatitude: pickupLat.toString(),
-        pickupLongitude: pickupLng.toString(),
-        dropoffAddress: tripData.dropoff.address || "Unknown destination",
-        fare: tripData.fare ? tripData.fare.toString() : "0",
-        distance: tripData.distance ? tripData.distance.toString() : "0",
-        // eslint-disable-next-line max-len
-        estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
-        expiresIn: "20", // Driver has 20 seconds to respond
-        notificationType: "tripRequest",
-        // Add notification time from tripData
-        notificationTime: tripData.notificationTime ?
-          tripData.notificationTime.toMillis().toString() :
-          Date.now().toString(),
-      };
-      // Add stops information if present
-      // eslint-disable-next-line max-len
-      if (tripData.stops && Array.isArray(tripData.stops) && tripData.stops.length > 0) {
-        // Create a formatted string of stops for the notification
-        const stopsCount = tripData.stops.length;
-        messageData.hasStops = "true";
-        messageData.stopsCount = stopsCount.toString();
-        // Calculate total waiting time
-        let totalWaitingTime = 0;
-        // eslint-disable-next-line max-len
-        // Add details for each stop (up to 5 stops - FCM has message size limitations)
-        const maxStops = Math.min(stopsCount, 5);
-        for (let i = 0; i < maxStops; i++) {
-          const stop = tripData.stops[i];
-          if (stop) {
-            // Add address information
-            // eslint-disable-next-line max-len
-            messageData[`stop${i + 1}Address`] = stop.address || "Unknown stop location";
-            // Add coordinates if available
-            if (stop.latitude && stop.longitude) {
-              messageData[`stop${i + 1}Latitude`] = stop.latitude.toString();
-              messageData[`stop${i + 1}Longitude`] = stop.longitude.toString();
-            }
-            // Add waiting time for each stop - important new addition
-            if (stop.waitingTime !== undefined) {
-              // eslint-disable-next-line max-len
-              messageData[`stop${i + 1}WaitingTime`] = stop.waitingTime.toString();
-              totalWaitingTime += parseInt(stop.waitingTime) || 0;
-            } else {
-              messageData[`stop${i + 1}WaitingTime`] = "0";
-            }
-          }
-        }
-        // Add total waiting time across all stops
-        messageData.totalWaitingTime = totalWaitingTime.toString();
-        // If more stops exist than we can include in the message
-        if (stopsCount > maxStops) {
-          messageData.additionalStops = (stopsCount - maxStops).toString();
-        }
-      } else {
-        messageData.hasStops = "false";
-        messageData.totalWaitingTime = "0";
-      }
+    // ── Send FCM notifications to all top drivers in parallel ─────────────────
+    const notifyResults = await Promise.allSettled(
+        topDrivers
+            .filter((driver) => driver.fcmToken) // skip drivers with no token
+            .map(async (driver) => {
+              const message = buildMessage(driver, tripId, tripData, pickupLat, pickupLng);
+              await fcm.send(message);
+              console.log(
+                  `✓ Notified driver ${driver.driverId} (${driver.tier}, ` +
+                  `${driver.priorityScore.toFixed(1)}pts, ${driver.distance.toFixed(2)}km)`,
+              );
+            }),
+    );
 
-      // Create notification message with additional waiting time info
-      // eslint-disable-next-line max-len
-      let notificationBody = `New pickup request (${topDriver.distance.toFixed(1)}km away)`;
-      // Add stops info
-      if (tripData.stops && tripData.stops.length > 0) {
-        // eslint-disable-next-line max-len
-        notificationBody += ` with ${tripData.stops.length} stop${tripData.stops.length > 1 ? "s" : ""}`;
-        // Add waiting time information if available
-        const totalWaitingMinutes = parseInt(messageData.totalWaitingTime) || 0;
-        if (totalWaitingMinutes > 0) {
-          notificationBody += ` (${totalWaitingMinutes} min waiting)`;
-        }
+    // Log any send failures without crashing the function
+    notifyResults.forEach((result, i) => {
+      if (result.status === "rejected") {
+        console.error(`✗ Failed to notify driver at index ${i}:`, result.reason);
       }
-      const message = {
-        token: topDriver.fcmToken,
-        notification: {
-          title: "New Trip Request",
-          body: notificationBody,
-        },
-        data: messageData,
-      };
+    });
 
-      try {
-        await fcm.send(message);
-        console.log(`Notification sent to driver ${topDriver.driverId}`);
-        // eslint-disable-next-line max-len
-        console.log(`Driver tier: ${topDriver.tier}, Priority: ${topDriver.priorityScore.toFixed(1)}`);
-      } catch (error) {
-        console.error("Error sending notification:", error);
-      }
-    }
+    const successCount = notifyResults.filter((r) => r.status === "fulfilled").length;
+    console.log(`Broadcast complete: ${successCount}/${topDrivers.length} drivers notified successfully.`);
 
     return null;
   } catch (error) {
