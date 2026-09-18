@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:taxi_auth_app/models/user_model.dart';
 import 'package:taxi_auth_app/services/auth_service.dart';
+import '../services/trip_persistence_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -62,6 +63,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> signOut() async {
     _setLoading(true);
     try {
+      // Clear any active trip persistence before signing out
+      final currentUserId = _user?.uid;
+      if (currentUserId != null) {
+        await TripPersistenceService.clearActiveTripForUser(currentUserId);
+      }
+      
       await _authService.signOut();
     } finally {
       _setLoading(false);

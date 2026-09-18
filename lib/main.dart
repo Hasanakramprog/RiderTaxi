@@ -6,6 +6,7 @@ import 'package:taxi_auth_app/providers/auth_provider.dart';
 import 'package:taxi_auth_app/providers/map_provider.dart';
 import 'package:taxi_auth_app/providers/firestore_provider.dart';
 import 'package:taxi_auth_app/widgets/auth_wrapper.dart';
+import 'package:taxi_auth_app/widgets/network_connectivity_widgets.dart';
 import 'firebase_options.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -164,10 +165,16 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => FirestoreProvider()),
+        ChangeNotifierProvider(create: (_) => NetworkConnectivityProvider()),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
         title: 'Ismail Taxi',
+        builder: (context, child) {
+          return NetworkConnectivityBanner(
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         theme: ThemeData(
           primarySwatch: Colors.amber,
           primaryColor: Colors.amber,

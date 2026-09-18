@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/network_connectivity_widgets.dart';
 import 'trip_request_screen_pro.dart';
 import 'trip_history_screen_pro.dart';
 import 'dart:math' as math;

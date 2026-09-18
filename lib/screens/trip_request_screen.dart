@@ -8,6 +8,8 @@ import '../widgets/location_input.dart';
 import '../models/location_model.dart';
 import 'trip_request_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/trip_persistence_service.dart';
+import '../widgets/network_connectivity_widgets.dart';
 
 class TripRequestScreen extends StatefulWidget {
   const TripRequestScreen({Key? key}) : super(key: key);
@@ -847,25 +849,136 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
                                   ),
                                 ),
                               ),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    _requestRide(context);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.amber,
-                                    foregroundColor: Colors.black,
-                                  ),
-                                  child: Text(
-                                    'Request Ride'.toUpperCase(),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final networkProvider =
+                                      Provider.of<NetworkConnectivityProvider>(
+                                        context,
+                                      );
+                                  final isOnline = networkProvider.isConnected;
+
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (!isOnline)
+                                        Container(
+                                          margin: const EdgeInsets.only(
+                                            bottom: 10,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                            horizontal: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.shade50,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Colors.red.shade200,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.cloud_off,
+                                                color: Colors.red.shade700,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'You are offline. Connect to internet to book.',
+                                                  style: TextStyle(
+                                                    color: Colors.red.shade800,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 50,
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            if (!isOnline) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: const Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.wifi_off,
+                                                        color: Colors.white,
+                                                      ),
+                                                      SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: Text(
+                                                          'No internet connection. Cannot book a ride right now.',
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.red.shade800,
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
+                                                ),
+                                              );
+                                              return;
+                                            }
+                                            _requestRide(context);
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                isOnline
+                                                    ? Colors.amber
+                                                    : Colors.grey.shade400,
+                                            foregroundColor:
+                                                isOnline
+                                                    ? Colors.black
+                                                    : Colors.white70,
+                                          ),
+                                          child:
+                                              isOnline
+                                                  ? Text(
+                                                    'Request Ride'.toUpperCase(),
+                                                    style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  )
+                                                  : const Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.wifi_off,
+                                                        size: 18,
+                                                        color: Colors.white,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        'OFFLINE - CANNOT BOOK',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.white,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                               const SizedBox(height: 12),
                             ],
@@ -926,6 +1039,31 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
   }
 
   Future<void> _requestRide(BuildContext context) async {
+    final networkProvider = Provider.of<NetworkConnectivityProvider>(
+      context,
+      listen: false,
+    );
+    if (!networkProvider.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.wifi_off, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'No internet connection. Please connect to internet to request a ride.',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade800,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // Show loading dialog
     showDialog(
       context: context,
@@ -1006,6 +1144,13 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
         'searchStartedAt': DateTime.now().millisecondsSinceEpoch,
       };
 
+      // Clear any existing trip persistence before creating new trip
+      final currentUserId = firestoreProvider.currentUserId;
+      if (currentUserId != null) {
+        await TripPersistenceService.clearActiveTripForUser(currentUserId);
+        print('Cleared existing persistence before creating new trip');
+      }
+      
       final tripRef = await firestoreProvider.createTrip(tripData);
 
       // Close loading dialog

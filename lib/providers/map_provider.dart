@@ -497,7 +497,7 @@ class MapProvider extends ChangeNotifier {
         );
       }
 
-      _updateRoute();
+      await _updateRoute();
     } catch (e) {
       print('Error setting dropoff location: $e');
     } finally {
@@ -658,7 +658,7 @@ class MapProvider extends ChangeNotifier {
       );
 
       _updateMarkers();
-      _updateRoute();
+      await _updateRoute();
 
       // Animate camera to the selected location
       if (_mapController != null) {
