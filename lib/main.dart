@@ -7,6 +7,8 @@ import 'package:taxi_auth_app/providers/map_provider.dart';
 import 'package:taxi_auth_app/providers/firestore_provider.dart';
 import 'package:taxi_auth_app/widgets/auth_wrapper.dart';
 import 'package:taxi_auth_app/widgets/network_connectivity_widgets.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:taxi_auth_app/services/notification_service.dart';
 import 'firebase_options.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -141,8 +143,13 @@ Future<void> createTestTrips() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // await EmulatorConfig.configureEmulators();
-  // createTestTrips(); // Create test trips for demo purposes
+  
+  // Register background message handler
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // Initialize notification service (requests permissions, registers channels & handlers)
+  await NotificationService().init();
+
   // Configure Firestore for better real-time performance
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,

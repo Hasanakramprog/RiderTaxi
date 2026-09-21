@@ -12,6 +12,7 @@
 const findNearbyDriversModule = require("./findNearbyDrivers");
 const updateDriverRatingModule = require("./updateDriverRating");
 const hotspotsModule = require("./hotspots");
+const tripNotificationsModule = require("./tripNotifications");
 // Create and deploy your first functions
 // https://firebase.google.com/docs/functions/get-started
 
@@ -29,3 +30,6 @@ exports.updateDriverRating = updateDriverRatingModule.updateDriverRating;
 // Export hotspots functions
 exports.calculateHotspots = hotspotsModule.calculateHotspots;
 exports.getHotspots = hotspotsModule.getHotspots;
+// Export trip status push notifications trigger for riders
+exports.onTripStatusChanged = tripNotificationsModule.onTripStatusChanged;
+

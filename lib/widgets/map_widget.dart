@@ -244,8 +244,12 @@ class _MapWidgetState extends State<MapWidget> {
 
     // Remove driver marker
     if (_driverMarker != null) {
-      final mapProvider = Provider.of<MapProvider>(context, listen: false);
-      mapProvider.removeDriverLocation();
+      if (mounted) {
+        try {
+          final mapProvider = Provider.of<MapProvider>(context, listen: false);
+          mapProvider.removeDriverLocation();
+        } catch (_) {}
+      }
       _driverMarker = null;
     }
   }

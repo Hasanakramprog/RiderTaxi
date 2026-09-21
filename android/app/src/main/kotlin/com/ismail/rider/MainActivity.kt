@@ -1,4 +1,4 @@
-package com.example.taxi_auth_app
+package com.ismail.rider
 
 import io.flutter.embedding.android.FlutterActivity
 
