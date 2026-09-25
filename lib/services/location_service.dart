@@ -6,9 +6,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../models/location_model.dart';
 
+import '../utils/app_config.dart';
+
 class LocationService {
-  final String _googleApiKey =
-      'AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis'; // Replace with your API key
+  final String _googleApiKey = AppConfig.googleMapsApiKey;
 
   // Get the current user location with timeout and fallback
   Future<Position?> getCurrentLocation() async {

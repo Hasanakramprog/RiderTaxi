@@ -6,6 +6,20 @@ plugins {
     id("com.google.gms.google-services")  // Add this line
 }
 
+import java.util.Properties
+import java.io.File
+
+val envFile = File(rootProject.projectDir.parentFile, ".env")
+val envProps = Properties()
+if (envFile.exists()) {
+    envFile.bufferedReader().use { envProps.load(it) }
+}
+
+val mapsApiKey: String = envProps.getProperty("GOOGLE_MAPS_API_KEY")
+    ?: (project.findProperty("GOOGLE_MAPS_API_KEY") as? String)
+    ?: System.getenv("GOOGLE_MAPS_API_KEY")
+    ?: ""
+
 android {
     namespace = "com.ismail.rider"
     compileSdk = flutter.compileSdkVersion
@@ -29,6 +43,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {

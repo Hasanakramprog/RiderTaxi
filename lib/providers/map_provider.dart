@@ -9,6 +9,7 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import '../models/location_model.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../utils/app_config.dart';
 
 class MapProvider extends ChangeNotifier {
   // Default initial camera position
@@ -881,7 +882,7 @@ class MapProvider extends ChangeNotifier {
     LatLng origin,
     LatLng destination,
   ) async {
-    const String apiKey = 'AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis';
+    final String apiKey = AppConfig.googleMapsApiKey;
 
     try {
       // ── DEBUG: raw HTTP call to see the EXACT Google API response ──────────
@@ -926,9 +927,7 @@ class MapProvider extends ChangeNotifier {
   // Helper function to get address from coordinates
   Future<String> _getAddressFromCoordinates(LatLng coordinates) async {
     try {
-      // This is a simplified implementation. In a real app, you'd use your API key.
-      String apiKey =
-          "AIzaSyBghYBLMtYdxteEo5GXM6eTdF_8Cc47tis"; // Replace with your API key
+      final String apiKey = AppConfig.googleMapsApiKey;
       final url =
           'https://maps.googleapis.com/maps/api/geocode/json'
           '?latlng=${coordinates.latitude},${coordinates.longitude}'

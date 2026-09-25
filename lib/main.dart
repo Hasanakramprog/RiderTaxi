@@ -10,6 +10,7 @@ import 'package:taxi_auth_app/widgets/network_connectivity_widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:taxi_auth_app/services/notification_service.dart';
 import 'firebase_options.dart';
+import 'package:taxi_auth_app/utils/app_config.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> createTestTrips() async {
@@ -142,6 +143,7 @@ Future<void> createTestTrips() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppConfig.logConfigStatus();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   
   // Register background message handler
