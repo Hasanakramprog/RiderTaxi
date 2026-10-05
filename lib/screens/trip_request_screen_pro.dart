@@ -14,6 +14,25 @@ import 'trip_tracking_screen.dart';
 
 enum _BookingStep { pickup, dropoff, stop, confirm }
 
+class _ProRideOption {
+  final String id;
+  final String name;
+  final IconData icon;
+  final String capacity;
+  final double priceMultiplier;
+  final String? badge;
+
+  const _ProRideOption({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.capacity,
+    required this.priceMultiplier,
+    this.badge,
+  });
+}
+
+
 class TripRequestScreenPro extends StatefulWidget {
   const TripRequestScreenPro({Key? key}) : super(key: key);
 
@@ -31,6 +50,41 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
   Timer? _geocodeDebounce;
   int _editingStopIndex = -1;
   String _selectedCarType = CarType.defaultId;
+  String _selectedDriverGender = 'any'; // 'any' | 'female' | 'male' (UI only)
+
+  static const List<_ProRideOption> _rideOptions = [
+    _ProRideOption(
+      id: 'bike',
+      name: 'Bike',
+      icon: Icons.two_wheeler,
+      capacity: '1 seat',
+      priceMultiplier: 0.65,
+      badge: 'Fast',
+    ),
+    _ProRideOption(
+      id: CarType.standard,
+      name: 'Standard',
+      icon: Icons.directions_car,
+      capacity: '4 seats',
+      priceMultiplier: 1.0,
+    ),
+    _ProRideOption(
+      id: CarType.xl,
+      name: 'XL',
+      icon: Icons.airport_shuttle,
+      capacity: '6 seats',
+      priceMultiplier: 1.5,
+    ),
+    _ProRideOption(
+      id: CarType.vip,
+      name: 'VIP',
+      icon: Icons.electric_car,
+      capacity: '4 seats',
+      priceMultiplier: 2.0,
+      badge: 'VIP',
+    ),
+  ];
+
 
   late AnimationController _sheetController;
 
@@ -914,8 +968,11 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
           _stopCharge,
           _waitingChargePerMinute,
         );
-        final selCar = CarType.byId(_selectedCarType);
-        final total = (base + extra) * selCar.priceMultiplier;
+        final selOption = _rideOptions.firstWhere(
+          (o) => o.id == _selectedCarType,
+          orElse: () => _rideOptions[1],
+        );
+        final total = (base + extra) * selOption.priceMultiplier;
 
         return _SheetWrapper(
           key: const ValueKey('confirm'),
@@ -1012,7 +1069,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
 
               const SizedBox(height: 14),
 
-              // Vehicle class
+              // Vehicle class (Car Types + Bike)
               const Text(
                 'Select Ride Class',
                 style: TextStyle(
@@ -1027,16 +1084,16 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 height: 100,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: CarType.all.length,
+                  itemCount: _rideOptions.length,
                   itemBuilder: (ctx, i) {
-                    final car = CarType.all[i];
-                    final isSelected = car.id == _selectedCarType;
+                    final ride = _rideOptions[i];
+                    final isSelected = ride.id == _selectedCarType;
                     final farePreview =
-                        (base + extra) * car.priceMultiplier;
+                        (base + extra) * ride.priceMultiplier;
                     return GestureDetector(
                       onTap:
                           () => setState(
-                            () => _selectedCarType = car.id,
+                            () => _selectedCarType = ride.id,
                           ),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -1057,42 +1114,76 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                             width: isSelected ? 2 : 1,
                           ),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Stack(
+                          clipBehavior: Clip.none,
                           children: [
-                            Icon(
-                              car.icon,
-                              size: 26,
-                              color:
-                                  isSelected
-                                      ? const Color(0xFFFFC107)
-                                      : Colors.grey,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              car.name,
-                              style: TextStyle(
-                                color:
-                                    isSelected
-                                        ? Colors.white
-                                        : Colors.grey.shade400,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                            Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    ride.icon,
+                                    size: 26,
+                                    color:
+                                        isSelected
+                                            ? const Color(0xFFFFC107)
+                                            : Colors.grey,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    ride.name,
+                                    style: TextStyle(
+                                      color:
+                                          isSelected
+                                              ? Colors.white
+                                              : Colors.grey.shade400,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    hasLocs
+                                        ? '\$${farePreview.toStringAsFixed(2)}'
+                                        : 'x${ride.priceMultiplier}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color:
+                                          isSelected
+                                              ? const Color(0xFFFFC107)
+                                              : Colors.grey,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              hasLocs
-                                  ? '\$${farePreview.toStringAsFixed(2)}'
-                                  : 'x${car.priceMultiplier}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color:
-                                    isSelected
+                            if (ride.badge != null)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
                                         ? const Color(0xFFFFC107)
-                                        : Colors.grey,
-                                fontWeight: FontWeight.bold,
+                                        : Colors.white24,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    ride.badge!,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.black
+                                          : Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -1100,6 +1191,67 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   },
                 ),
               ),
+
+              const SizedBox(height: 14),
+
+              // Driver preference (Female / Male / Any) - UI only
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Driver Preference',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'UI Only',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  _buildGenderChip(
+                    id: 'any',
+                    label: 'Any',
+                    icon: Icons.people_outline,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildGenderChip(
+                    id: 'female',
+                    label: 'Female',
+                    icon: Icons.female,
+                    accentColor: const Color(0xFFE91E63),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildGenderChip(
+                    id: 'male',
+                    label: 'Male',
+                    icon: Icons.male,
+                    accentColor: const Color(0xFF2196F3),
+                  ),
+                ],
+              ),
+
 
               const SizedBox(height: 12),
 
@@ -1161,6 +1313,54 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildGenderChip({
+    required String id,
+    required String label,
+    required IconData icon,
+    Color? accentColor,
+  }) {
+    final isSelected = _selectedDriverGender == id;
+    final activeColor = accentColor ?? const Color(0xFFFFC107);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedDriverGender = id),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? activeColor.withOpacity(0.15)
+                : const Color(0xFF242424),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? activeColor : Colors.white12,
+              width: isSelected ? 1.8 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected ? activeColor : Colors.grey,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey.shade400,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1238,16 +1438,26 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     try {
       final mp = Provider.of<MapProvider>(context, listen: false);
       final fp = Provider.of<FirestoreProvider>(context, listen: false);
-      final selCar = CarType.byId(_selectedCarType);
+      final selOption = _rideOptions.firstWhere(
+        (o) => o.id == _selectedCarType,
+        orElse: () => _rideOptions[1],
+      );
       final base = mp.estimatedFare;
       final extra = mp.calculateAdditionalCharges(
         _stopCharge,
         _waitingChargePerMinute,
       );
-      final fare = (base + extra) * selCar.priceMultiplier;
+      final fare = (base + extra) * selOption.priceMultiplier;
+
+      // Safe fallback for backend while 'bike' is UI-only
+      final backendCarType = CarType.ids.contains(_selectedCarType)
+          ? _selectedCarType
+          : CarType.standard;
 
       final tripData = {
-        'carType': _selectedCarType,
+        'carType': backendCarType,
+        'requestedCarType': _selectedCarType,
+        'driverGenderPreference': _selectedDriverGender,
         'fare': fare,
         'distance': mp.estimatedDistance,
         'duration': mp.estimatedDuration,
@@ -1286,8 +1496,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
         'searchStartedAt': DateTime.now().millisecondsSinceEpoch,
       };
 
-      assert(CarType.ids.contains(_selectedCarType),
-          'Invalid carType: $_selectedCarType');
+      assert(CarType.ids.contains(backendCarType),
+          'Invalid carType: $backendCarType');
 
       final tripRef = await fp.createTrip(tripData);
       mp.resetTripData();
