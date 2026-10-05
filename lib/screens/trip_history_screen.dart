@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../models/car_type.dart';
 import '../providers/firestore_provider.dart';
 import 'trip_tracking_screen.dart';
 
@@ -378,20 +379,24 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> with SingleTicker
     switch (carType) {
       case 'economy':
         return Icons.directions_car;
-      case 'standard':
+      case CarType.standard:
         return Icons.directions_car;
       case 'premium':
         return Icons.airline_seat_recline_extra;
-      case 'xl':
+      case CarType.xl:
         return Icons.airport_shuttle;
+      case CarType.vip:
+        return Icons.electric_car;
       default:
         return Icons.local_taxi;
     }
   }
   
   String _formatCarType(String? carType) {
-    if (carType == null) return 'Standard';
-    
+    if (carType == null) return CarType.byId(CarType.defaultId).name;
+    if (CarType.ids.contains(carType)) {
+      return CarType.byId(carType).name;
+    }
     return carType.split('_').map((word) => word.capitalize()).join(' ');
   }
 }

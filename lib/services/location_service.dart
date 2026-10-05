@@ -88,7 +88,7 @@ class LocationService {
   // Get address from latitude and longitude
   Future<String> getAddressFromLatLng(LatLng latLng) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
+      List<Placemark> placemarks = await Geocoding().placemarkFromCoordinates(
         latLng.latitude,
         latLng.longitude,
       );

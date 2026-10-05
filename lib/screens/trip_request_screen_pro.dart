@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../models/location_model.dart';
+import '../models/car_type.dart';
 import '../providers/map_provider.dart';
 import '../providers/firestore_provider.dart';
 import '../widgets/map_widget.dart';
@@ -29,36 +30,12 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
   LatLng? _dragLatLng;
   Timer? _geocodeDebounce;
   int _editingStopIndex = -1;
-  String _selectedCarType = 'standard';
+  String _selectedCarType = CarType.defaultId;
 
   late AnimationController _sheetController;
 
   static const double _stopCharge = 2.0;
   static const double _waitingChargePerMinute = 0.5;
-
-  final List<Map<String, dynamic>> _carTypes = [
-    {
-      'id': 'standard',
-      'name': 'Standard',
-      'icon': Icons.directions_car,
-      'capacity': '4 seats',
-      'price': 1.0,
-    },
-    {
-      'id': 'xl',
-      'name': 'XL',
-      'icon': Icons.airport_shuttle,
-      'capacity': '6 seats',
-      'price': 1.5,
-    },
-    {
-      'id': 'vip',
-      'name': 'VIP',
-      'icon': Icons.electric_car,
-      'capacity': '4 seats',
-      'price': 2.0,
-    },
-  ];
 
   // ── Lifecycle ──────────────────────────────────────────────────────
   @override
@@ -937,11 +914,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
           _stopCharge,
           _waitingChargePerMinute,
         );
-        final selCar = _carTypes.firstWhere(
-          (c) => c['id'] == _selectedCarType,
-          orElse: () => _carTypes[0],
-        );
-        final total = (base + extra) * (selCar['price'] as double);
+        final selCar = CarType.byId(_selectedCarType);
+        final total = (base + extra) * selCar.priceMultiplier;
 
         return _SheetWrapper(
           key: const ValueKey('confirm'),
@@ -1053,16 +1027,16 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 height: 100,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: _carTypes.length,
+                  itemCount: CarType.all.length,
                   itemBuilder: (ctx, i) {
-                    final car = _carTypes[i];
-                    final isSelected = car['id'] == _selectedCarType;
+                    final car = CarType.all[i];
+                    final isSelected = car.id == _selectedCarType;
                     final farePreview =
-                        (base + extra) * (car['price'] as double);
+                        (base + extra) * car.priceMultiplier;
                     return GestureDetector(
                       onTap:
                           () => setState(
-                            () => _selectedCarType = car['id'] as String,
+                            () => _selectedCarType = car.id,
                           ),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -1087,7 +1061,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              car['icon'] as IconData,
+                              car.icon,
                               size: 26,
                               color:
                                   isSelected
@@ -1096,7 +1070,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              car['name'] as String,
+                              car.name,
                               style: TextStyle(
                                 color:
                                     isSelected
@@ -1109,7 +1083,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                             Text(
                               hasLocs
                                   ? '\$${farePreview.toStringAsFixed(2)}'
-                                  : 'x${car["price"]}',
+                                  : 'x${car.priceMultiplier}',
                               style: TextStyle(
                                 fontSize: 11,
                                 color:
@@ -1264,16 +1238,13 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     try {
       final mp = Provider.of<MapProvider>(context, listen: false);
       final fp = Provider.of<FirestoreProvider>(context, listen: false);
-      final selCar = _carTypes.firstWhere(
-        (c) => c['id'] == _selectedCarType,
-        orElse: () => _carTypes[0],
-      );
+      final selCar = CarType.byId(_selectedCarType);
       final base = mp.estimatedFare;
       final extra = mp.calculateAdditionalCharges(
         _stopCharge,
         _waitingChargePerMinute,
       );
-      final fare = (base + extra) * (selCar['price'] as double);
+      final fare = (base + extra) * selCar.priceMultiplier;
 
       final tripData = {
         'carType': _selectedCarType,
@@ -1314,6 +1285,9 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 .toList(),
         'searchStartedAt': DateTime.now().millisecondsSinceEpoch,
       };
+
+      assert(CarType.ids.contains(_selectedCarType),
+          'Invalid carType: $_selectedCarType');
 
       final tripRef = await fp.createTrip(tripData);
       mp.resetTripData();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import '../models/car_type.dart';
 import '../providers/firestore_provider.dart';
 import 'trip_tracking_screen.dart';
 
@@ -530,7 +531,10 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
   }
 
   String _formatCarType(String? carType) {
-    if (carType == null) return 'Standard';
+    if (carType == null) return CarType.byId(CarType.defaultId).name;
+    if (CarType.ids.contains(carType)) {
+      return CarType.byId(carType).name;
+    }
     return carType.split('_').map((word) => word.capitalize()).join(' ');
   }
 }

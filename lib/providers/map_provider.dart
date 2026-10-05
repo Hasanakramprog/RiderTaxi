@@ -905,8 +905,7 @@ class MapProvider extends ChangeNotifier {
 
         if (status == 'OK') {
           final points = decoded['routes'][0]['overview_polyline']['points'] as String;
-          final PolylinePoints polylinePoints = PolylinePoints();
-          final List<PointLatLng> decoded2 = polylinePoints.decodePolyline(points);
+          final List<PointLatLng> decoded2 = PolylinePoints.decodePolyline(points);
           print('🗺️ Route OK — ${decoded2.length} polyline points');
           return decoded2.map((p) => LatLng(p.latitude, p.longitude)).toList();
         } else {

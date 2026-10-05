@@ -5,8 +5,7 @@ import '../providers/map_provider.dart';
 import '../providers/firestore_provider.dart';
 import '../widgets/map_widget.dart';
 import '../widgets/location_input.dart';
-import '../models/location_model.dart';
-import 'trip_request_screen.dart';
+import '../models/car_type.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/trip_persistence_service.dart';
 import '../widgets/network_connectivity_widgets.dart';
@@ -23,7 +22,7 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
   bool _isMapSelectionMode = false;
   bool _isPickupSelection = true;
   int _currentStopIndex = -1;
-  String _selectedCarType = 'standard';
+  String _selectedCarType = CarType.defaultId;
 
   final double _stopCharge = 2.0;
   final double _waitingChargePerMinute = 0.5;
@@ -32,22 +31,22 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
   List<Map<String, dynamic>> _getCarTypes() {
     return [
       {
-        'id': 'standard',
-        'name': 'Standard',
+        'id': CarType.standard,
+        'name': CarType.byId(CarType.standard).name,
         'image': 'assets/car_standard.webp',
         'description': 'Standard car for everyday trips',
         'price': 1.0,
       },
       {
-        'id': 'xl',
-        'name': 'XL',
+        'id': CarType.xl,
+        'name': CarType.byId(CarType.xl).name,
         'image': 'assets/car_xl.webp',
         'description': 'Larger car for more passengers and luggage',
         'price': 1.5,
       },
       {
-        'id': 'vip',
-        'name': 'VIP',
+        'id': CarType.vip,
+        'name': CarType.byId(CarType.vip).name,
         'image': 'assets/car_vip.webp',
         'description': 'Premium luxury car with top-tier comfort',
         'price': 2.0,
@@ -794,7 +793,7 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
                                           ),
                                         ),
 
-                                      if (_selectedCarType != 'standard')
+                                      if (_selectedCarType != CarType.standard)
                                         Padding(
                                           padding: const EdgeInsets.only(
                                             top: 8.0,
@@ -1010,19 +1009,19 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
       return Image.asset('assets/car_${carType}.webp', fit: BoxFit.contain);
     } catch (e) {
       switch (carType) {
-        case 'standard':
+        case CarType.standard:
           return Icon(
             Icons.directions_car,
             size: 50,
             color: Colors.amber.shade700,
           );
-        case 'xl':
+        case CarType.xl:
           return Icon(
             Icons.airport_shuttle,
             size: 50,
             color: Colors.amber.shade700,
           );
-        case 'vip':
+        case CarType.vip:
           return Icon(
             Icons.electric_car,
             size: 50,
@@ -1151,6 +1150,9 @@ class _TripRequestScreenState extends State<TripRequestScreen> {
         print('Cleared existing persistence before creating new trip');
       }
       
+      assert(CarType.ids.contains(_selectedCarType),
+          'Invalid carType: $_selectedCarType');
+
       final tripRef = await firestoreProvider.createTrip(tripData);
 
       // Close loading dialog
