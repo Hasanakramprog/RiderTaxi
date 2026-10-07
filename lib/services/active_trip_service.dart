@@ -12,6 +12,52 @@ class ActiveTripService {
     'in_progress',
   ];
 
+  // Check if a trip is older than 1 hour (strictly for startup filtering)
+  static bool isTripOlderThanOneHour(
+    Map<String, dynamic> tripData, {
+    Duration maxAge = const Duration(hours: 1),
+  }) {
+    DateTime? tripTime;
+
+    // 1. Check createdAt (Timestamp, int ms, or String ISO)
+    final createdAt = tripData['createdAt'];
+    if (createdAt is Timestamp) {
+      tripTime = createdAt.toDate();
+    } else if (createdAt is int) {
+      tripTime = DateTime.fromMillisecondsSinceEpoch(createdAt);
+    } else if (createdAt is String) {
+      tripTime = DateTime.tryParse(createdAt);
+    }
+
+    // 2. Fallback to searchStartedAt
+    if (tripTime == null) {
+      final searchStartedAt = tripData['searchStartedAt'];
+      if (searchStartedAt is int) {
+        tripTime = DateTime.fromMillisecondsSinceEpoch(searchStartedAt);
+      } else if (searchStartedAt is Timestamp) {
+        tripTime = searchStartedAt.toDate();
+      }
+    }
+
+    // 3. Fallback to updatedAt
+    if (tripTime == null) {
+      final updatedAt = tripData['updatedAt'];
+      if (updatedAt is Timestamp) {
+        tripTime = updatedAt.toDate();
+      } else if (updatedAt is String) {
+        tripTime = DateTime.tryParse(updatedAt);
+      }
+    }
+
+    // Only considered expired if trip timestamp is known and age is >= maxAge (1 hour)
+    if (tripTime != null) {
+      final age = DateTime.now().difference(tripTime);
+      return age >= maxAge;
+    }
+
+    return false;
+  }
+
   // Find active trip for a user
   Future<String?> findActiveTripForUser(String userId) async {
     try {
@@ -22,14 +68,29 @@ class ActiveTripService {
           .where('userId', isEqualTo: userId)
           .where('status', whereIn: _activeStatuses)
           .orderBy('createdAt', descending: true)
-          .limit(1)
+          .limit(5)
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        final tripDoc = querySnapshot.docs.first;
-        final tripId = tripDoc.id;
-        print('Found active trip in Firestore: $tripId');
-        return tripId;
+        for (final doc in querySnapshot.docs) {
+          final tripData = doc.data();
+          final isExpired = isTripOlderThanOneHour(tripData);
+          if (isExpired) {
+            print('Candidate trip ${doc.id} is older than 1 hour, ignoring on startup and cleaning up');
+            final status = tripData['status']?.toString();
+            if (status == 'searching' || tripData['noDriversAvailable'] == true) {
+              _firestore.collection('trips').doc(doc.id).update({
+                'status': 'cancelled',
+                'cancellationReason': 'auto_expired_timeout',
+                'lastUpdated': FieldValue.serverTimestamp(),
+              }).catchError((_) {});
+            }
+            continue;
+          }
+          final tripId = doc.id;
+          print('Found active trip in Firestore: $tripId');
+          return tripId;
+        }
       }
 
       print('No active trips found in Firestore for user: $userId');
@@ -96,8 +157,23 @@ class ActiveTripService {
       final belongsToUser = tripUserId == userId;
       final isActive = status != null && _activeStatuses.contains(status);
 
-      print('Trip verification: belongsToUser=$belongsToUser, isActive=$isActive, status=$status');
-      
+      // Check if trip is older than 1 hour (startup check)
+      final isExpired = isTripOlderThanOneHour(tripData);
+
+      print('Trip verification: belongsToUser=$belongsToUser, isActive=$isActive, isExpired=$isExpired, status=$status');
+
+      if (isExpired) {
+        print('Trip $tripId is older than 1 hour, marking inactive on startup');
+        if (status == 'searching' || tripData['noDriversAvailable'] == true) {
+          _firestore.collection('trips').doc(tripId).update({
+            'status': 'cancelled',
+            'cancellationReason': 'auto_expired_timeout',
+            'lastUpdated': FieldValue.serverTimestamp(),
+          }).catchError((_) {});
+        }
+        return false;
+      }
+
       return belongsToUser && isActive;
     } catch (e) {
       print('Error verifying trip $tripId: $e');
@@ -115,7 +191,7 @@ class ActiveTripService {
           .get();
 
       final trips = querySnapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
+        final data = doc.data();
         data['tripId'] = doc.id;
         return data;
       }).toList();

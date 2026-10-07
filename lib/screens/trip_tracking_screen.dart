@@ -25,8 +25,13 @@ const _kOrange = Color(0xFFFF9800);
 
 class TripTrackingScreen extends StatefulWidget {
   final String tripId;
+  final VoidCallback? onGoHome;
 
-  const TripTrackingScreen({Key? key, required this.tripId}) : super(key: key);
+  const TripTrackingScreen({
+    Key? key,
+    required this.tripId,
+    this.onGoHome,
+  }) : super(key: key);
 
   @override
   State<TripTrackingScreen> createState() => _TripTrackingScreenState();
@@ -54,6 +59,22 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
   late AnimationController _entranceController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+
+  // ── Unified Navigate Home (clears persistence & routes to HomeScreenPro) ──
+  Future<void> _navigateHome() async {
+    _cancelAllTimers();
+    await TripPersistenceService.clearActiveTrip();
+    if (mounted) {
+      Provider.of<MapProvider>(context, listen: false).resetTripData();
+    }
+    widget.onGoHome?.call();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeScreenPro()),
+        (route) => false,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -328,8 +349,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
               progressValue: _progressValue,
               onCancelTrip: _showCancelTripDialog,
               onCallDriver: _callDriver,
-              onGoHome: () =>
-                  Navigator.of(context).popUntil((r) => r.isFirst),
+              onGoHome: _navigateHome,
             ),
           ),
         ],
@@ -766,10 +786,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
             });
         Navigator.of(context).pop();
         _showPremiumSnackBar('Trip cancelled successfully', _kGold);
-        if (mounted) {
-          Provider.of<MapProvider>(context, listen: false).resetTripData();
-        }
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        await _navigateHome();
       } catch (e) {
         Navigator.of(context).pop();
         _showPremiumSnackBar('Error cancelling trip: $e', _kRed);
@@ -1415,9 +1432,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                         child: OutlinedButton(
                           onPressed: () {
                             Navigator.of(ctx).pop();
-                            Navigator.of(
-                              context,
-                            ).popUntil((route) => route.isFirst);
+                            _navigateHome();
                           },
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: Colors.white24),
@@ -2218,13 +2233,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: () {
-                Provider.of<MapProvider>(
-                  context,
-                  listen: false,
-                ).resetTripData();
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
+              onPressed: _navigateHome,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kGold,
                 foregroundColor: Colors.black,
@@ -2319,10 +2328,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
           ),
           const SizedBox(height: 10),
           TextButton(
-            onPressed: () {
-              Provider.of<MapProvider>(context, listen: false).resetTripData();
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
+            onPressed: _navigateHome,
             child: const Text(
               'Back to Home',
               style: TextStyle(color: Colors.white38, fontSize: 13),

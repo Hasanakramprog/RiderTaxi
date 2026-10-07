@@ -1,6 +1,7 @@
 // eslint-disable-next-line max-len
-const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const {admin, db, fcm} = require("./adminConfig"); // Use shared config
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { admin, db, fcm } = require("./adminConfig"); // Use shared config
+const { getEffectiveSettings } = require("./walletCore");
 
 // Initialize admin if not already initialized
 // if (!admin.apps.length) {
@@ -191,11 +192,11 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
 // eslint-disable-next-line require-jsdoc
 async function findDriversForTrip(tripId, tripData) {
   try {
-    logDebug("Processing trip", {tripId, tripStatus: tripData.status});
+    logDebug("Processing trip", { tripId, tripStatus: tripData.status });
 
     // Only process trips with 'searching' status
     if (tripData.status !== "searching") {
-      logDebug("Trip not in searching status", {status: tripData.status});
+      logDebug("Trip not in searching status", { status: tripData.status });
       return null;
     }
 
@@ -208,14 +209,26 @@ async function findDriversForTrip(tripId, tripData) {
     // Define search radius (in km)
     const searchRadius = 5;
 
-    // Query for available drivers
-    const driversSnapshot = await db.collection("drivers")
-        .where("isOnline", "==", true)
-        .where("isAvailable", "==", true)
-        .get();
+    // 1. Read app_settings/wallet once per invocation (section 4.4)
+    const settingsDoc = await db.collection("app_settings").doc("wallet").get();
+    const walletSettings = getEffectiveSettings(settingsDoc.data());
+
+    // 2. Query for available drivers with walletCanWork == true
+    let driversQuery = db.collection("drivers")
+      .where("isOnline", "==", true)
+      .where("isAvailable", "==", true)
+      .where("walletCanWork", "==", true);
+
+
+    // If carType filter is present on trip
+    if (tripData.carType) {
+      driversQuery = driversQuery.where("carType", "==", tripData.carType);
+    }
+
+    const driversSnapshot = await driversQuery.get();
 
     if (driversSnapshot.empty) {
-      console.log("No available drivers found");
+      console.log("No available drivers found with walletCanWork == true");
       // You might want to update the trip status here
       await db.collection("trips").doc(tripId).update({
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -224,8 +237,8 @@ async function findDriversForTrip(tripId, tripData) {
       return null;
     }
 
-    // Calculate distance and priority for each driver
-    const driversWithPriority = [];
+    // Calculate distance and filter drivers within search radius
+    const candidatesInRadius = [];
 
     driversSnapshot.forEach((doc) => {
       const driverData = doc.data();
@@ -236,36 +249,24 @@ async function findDriversForTrip(tripId, tripData) {
         driverData.location.latitude &&
         driverData.location.longitude) {
         const distance = calculateDistance(
-            pickupLat,
-            pickupLng,
-            driverData.location.latitude,
-            driverData.location.longitude,
+          pickupLat,
+          pickupLng,
+          driverData.location.latitude,
+          driverData.location.longitude,
         );
 
         // Only include drivers within the search radius
         if (distance <= searchRadius) {
-          // Calculate priority score for this driver
-          const driverWithPriority = calculateDriverPriority(
-              {
-                driverId: driverId,
-                ...driverData,
-              },
-              pickupLat,
-              pickupLng,
-              distance,
-          );
-
-          driversWithPriority.push(driverWithPriority);
+          candidatesInRadius.push({
+            driverId,
+            driverData,
+            distance,
+          });
         }
       }
     });
 
-    // Sort drivers by PRIORITY SCORE (highest first) instead of distance
-    driversWithPriority.sort((a, b) => b.priorityScore - a.priorityScore);
-
-    console.log(`Found ${driversWithPriority.length} nearby drivers`);
-
-    if (driversWithPriority.length === 0) {
+    if (candidatesInRadius.length === 0) {
       console.log("No drivers within search radius");
       await db.collection("trips").doc(tripId).update({
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -273,6 +274,71 @@ async function findDriversForTrip(tripId, tripData) {
       });
       return null;
     }
+
+    // 3. Batch load driver_wallets for in-radius candidates and enforce balance + overdraft eligibility
+    const rawFare = Number(tripData.fare || tripData.estimatedFare || 0);
+    const estimateFareCents = Math.round(rawFare * 100);
+    const requiredAllowanceCents = Math.round(
+      estimateFareCents * walletSettings.dispatchBufferMultiplier,
+    );
+
+    const walletRefs = candidatesInRadius.map((c) =>
+      db.collection("driver_wallets").doc(c.driverId),
+    );
+    const walletDocs = await db.getAll(...walletRefs);
+    const walletMap = new Map();
+    walletDocs.forEach((doc) => {
+      if (doc.exists) walletMap.set(doc.id, doc.data());
+    });
+
+    const eligibleCandidates = [];
+    for (const candidate of candidatesInRadius) {
+      const wallet = walletMap.get(candidate.driverId);
+      if (!wallet) {
+        console.warn(`Candidate ${candidate.driverId} has no wallet document. Excluded.`);
+        continue;
+      }
+
+      const balanceCents = wallet.balanceCents || 0;
+      const overdraftLimit = walletSettings.overdraftLimitCents;
+      const totalAvailable = balanceCents + overdraftLimit;
+
+      if (totalAvailable >= requiredAllowanceCents) {
+        eligibleCandidates.push(candidate);
+      } else {
+        console.log(
+          `Candidate ${candidate.driverId} insufficient wallet allowance: available=${totalAvailable}c, required=${requiredAllowanceCents}c`,
+        );
+      }
+    }
+
+    if (eligibleCandidates.length === 0) {
+      console.log("No drivers have sufficient wallet balance for trip fare");
+      await db.collection("trips").doc(tripId).update({
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        noDriversAvailable: true,
+        noDriversReason: "insufficient_balance",
+      });
+      return null;
+    }
+
+    // 4. Calculate priority score for eligible drivers
+    const driversWithPriority = eligibleCandidates.map((c) => {
+      return calculateDriverPriority(
+        {
+          driverId: c.driverId,
+          ...c.driverData,
+        },
+        pickupLat,
+        pickupLng,
+        c.distance,
+      );
+    });
+
+    // Sort drivers by PRIORITY SCORE (highest first) instead of distance
+    driversWithPriority.sort((a, b) => b.priorityScore - a.priorityScore);
+
+    console.log(`Found ${driversWithPriority.length} eligible nearby drivers`);
 
     // ── Task 1: Broadcast to top 3 drivers simultaneously ────────────────────
     const TOP_N = 3;
@@ -313,16 +379,16 @@ async function findDriversForTrip(tripId, tripData) {
 
     // ── Send FCM notifications to all top drivers in parallel ─────────────────
     const notifyResults = await Promise.allSettled(
-        topDrivers
-            .filter((driver) => driver.fcmToken) // skip drivers with no token
-            .map(async (driver) => {
-              const message = buildMessage(driver, tripId, tripData, pickupLat, pickupLng);
-              await fcm.send(message);
-              console.log(
-                  `✓ Notified driver ${driver.driverId} (${driver.tier}, ` +
-                  `${driver.priorityScore.toFixed(1)}pts, ${driver.distance.toFixed(2)}km)`,
-              );
-            }),
+      topDrivers
+        .filter((driver) => driver.fcmToken) // skip drivers with no token
+        .map(async (driver) => {
+          const message = buildMessage(driver, tripId, tripData, pickupLat, pickupLng);
+          await fcm.send(message);
+          console.log(
+            `✓ Notified driver ${driver.driverId} (${driver.tier}, ` +
+            `${driver.priorityScore.toFixed(1)}pts, ${driver.distance.toFixed(2)}km)`,
+          );
+        }),
     );
 
     // Log any send failures without crashing the function
@@ -349,7 +415,7 @@ exports.findNearbyDrivers = onDocumentCreated("trips/{tripId}", async (event) =>
     const tripId = event.params.tripId;
     const tripData = event.data.data();
 
-    logDebug("New trip created", {tripId, tripData});
+    logDebug("New trip created", { tripId, tripData });
 
     return findDriversForTrip(tripId, tripData);
   } catch (error) {
@@ -387,7 +453,7 @@ exports.refreshNearbyDriversSearch = onDocumentUpdated("trips/{tripId}", async (
       return null;
     }
     // eslint-disable-next-line max-len
-    logDebug("Refreshing driver search", {tripId, searchAttempts: afterData.searchAttempts || 0});
+    logDebug("Refreshing driver search", { tripId, searchAttempts: afterData.searchAttempts || 0 });
     return findDriversForTrip(tripId, afterData);
   } catch (error) {
     console.error("Error in refreshNearbyDriversSearch function:", error);

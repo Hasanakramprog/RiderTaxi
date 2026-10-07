@@ -75,6 +75,17 @@ class TripPersistenceService {
       }
       
       final tripData = jsonDecode(tripDataJson) as Map<String, dynamic>;
+
+      // Check if persisted trip is expired (> 1 hour old)
+      final createdAtStr = tripData['createdAt']?.toString();
+      final updatedAtStr = tripData['updatedAt']?.toString();
+      DateTime? tripTime = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+      tripTime ??= updatedAtStr != null ? DateTime.tryParse(updatedAtStr) : null;
+      if (tripTime != null && DateTime.now().difference(tripTime).inMinutes >= 60) {
+        print('Persisted trip $tripId is > 1 hour old, clearing persistence');
+        await clearActiveTrip();
+        return null;
+      }
       
       print('Retrieved active trip from persistence: $tripId');
       return tripData;

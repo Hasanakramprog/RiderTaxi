@@ -121,7 +121,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
       // If we found an active trip, navigate to trip tracking
       if (_activeTripId != null) {
         print('Navigating to active trip: $_activeTripId');
-        return TripTrackingScreen(tripId: _activeTripId!);
+        return TripTrackingScreen(
+          tripId: _activeTripId!,
+          onGoHome: () {
+            if (mounted) {
+              setState(() {
+                _activeTripId = null;
+              });
+            }
+          },
+        );
       }
       
       // Show loading while checking for active trips
