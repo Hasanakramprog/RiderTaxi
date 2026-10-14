@@ -17,18 +17,22 @@ enum _BookingStep { pickup, dropoff, stop, confirm }
 class _ProRideOption {
   final String id;
   final String name;
-  final IconData icon;
+  final IconData? icon;
+  final String? emoji;
   final String capacity;
   final double priceMultiplier;
   final String? badge;
+  final Color? badgeColor;
 
   const _ProRideOption({
     required this.id,
     required this.name,
-    required this.icon,
+    this.icon,
+    this.emoji,
     required this.capacity,
     required this.priceMultiplier,
     this.badge,
+    this.badgeColor,
   });
 }
 
@@ -50,7 +54,6 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
   Timer? _geocodeDebounce;
   int _editingStopIndex = -1;
   String _selectedCarType = CarType.defaultId;
-  String _selectedDriverGender = 'any'; // 'any' | 'female' | 'male' (UI only)
 
   static const List<_ProRideOption> _rideOptions = [
     _ProRideOption(
@@ -67,6 +70,15 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
       icon: Icons.directions_car,
       capacity: '4 seats',
       priceMultiplier: 1.0,
+    ),
+    _ProRideOption(
+      id: 'female',
+      name: 'Female',
+      emoji: '🧕',
+      capacity: '4 seats',
+      priceMultiplier: 1.0,
+      badge: 'Women',
+      badgeColor: Color(0xFFE91E63),
     ),
     _ProRideOption(
       id: CarType.xl,
@@ -1069,137 +1081,12 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
 
               const SizedBox(height: 14),
 
-              // Vehicle class (Car Types + Bike)
-              const Text(
-                'Select Ride Class',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              SizedBox(
-                height: 100,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _rideOptions.length,
-                  itemBuilder: (ctx, i) {
-                    final ride = _rideOptions[i];
-                    final isSelected = ride.id == _selectedCarType;
-                    final farePreview =
-                        (base + extra) * ride.priceMultiplier;
-                    return GestureDetector(
-                      onTap:
-                          () => setState(
-                            () => _selectedCarType = ride.id,
-                          ),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 110,
-                        margin: const EdgeInsets.only(right: 10),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color:
-                              isSelected
-                                  ? const Color(0xFFFFC107).withOpacity(0.12)
-                                  : const Color(0xFF242424),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color:
-                                isSelected
-                                    ? const Color(0xFFFFC107)
-                                    : Colors.white12,
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    ride.icon,
-                                    size: 26,
-                                    color:
-                                        isSelected
-                                            ? const Color(0xFFFFC107)
-                                            : Colors.grey,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    ride.name,
-                                    style: TextStyle(
-                                      color:
-                                          isSelected
-                                              ? Colors.white
-                                              : Colors.grey.shade400,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    hasLocs
-                                        ? '\$${farePreview.toStringAsFixed(2)}'
-                                        : 'x${ride.priceMultiplier}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                          isSelected
-                                              ? const Color(0xFFFFC107)
-                                              : Colors.grey,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (ride.badge != null)
-                              Positioned(
-                                top: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? const Color(0xFFFFC107)
-                                        : Colors.white24,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    ride.badge!,
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.black
-                                          : Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Driver preference (Female / Male / Any) - UI only
+              // Vehicle class (Car Types + Bike) - All options displayed simultaneously
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Driver Preference',
+                    'Select Ride Class',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -1209,49 +1096,198 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 2,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+                      color: const Color(0xFFFFC107).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      'UI Only',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
+                      border: Border.all(
+                        color: const Color(0xFFFFC107).withValues(alpha: 0.35),
+                        width: 1,
                       ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (selOption.emoji != null)
+                          Text(
+                            selOption.emoji!,
+                            style: const TextStyle(fontSize: 13),
+                          )
+                        else if (selOption.icon != null)
+                          Icon(
+                            selOption.icon,
+                            size: 13,
+                            color: const Color(0xFFFFC107),
+                          ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${selOption.name} • ${selOption.capacity}',
+                          style: const TextStyle(
+                            color: Color(0xFFFFC107),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
 
+              // Responsive row displaying all ride classes (including Female with hijab icon)
               Row(
                 children: [
-                  _buildGenderChip(
-                    id: 'any',
-                    label: 'Any',
-                    icon: Icons.people_outline,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildGenderChip(
-                    id: 'female',
-                    label: 'Female',
-                    icon: Icons.female,
-                    accentColor: const Color(0xFFE91E63),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildGenderChip(
-                    id: 'male',
-                    label: 'Male',
-                    icon: Icons.male,
-                    accentColor: const Color(0xFF2196F3),
-                  ),
+                  for (int i = 0; i < _rideOptions.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    Expanded(
+                      child: Builder(
+                        builder: (ctx) {
+                          final ride = _rideOptions[i];
+                          final isSelected = ride.id == _selectedCarType;
+                          final farePreview =
+                              (base + extra) * ride.priceMultiplier;
+                          return GestureDetector(
+                            onTap:
+                                () => setState(
+                                  () => _selectedCarType = ride.id,
+                                ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 9,
+                                horizontal: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    isSelected
+                                        ? const Color(0xFFFFC107).withValues(alpha: 0.14)
+                                        : const Color(0xFF242424),
+                                borderRadius: BorderRadius.circular(13),
+                                border: Border.all(
+                                  color:
+                                      isSelected
+                                          ? const Color(0xFFFFC107)
+                                          : Colors.white12,
+                                  width: isSelected ? 2 : 1,
+                                ),
+                                boxShadow:
+                                    isSelected
+                                        ? [
+                                          BoxShadow(
+                                            color: const Color(
+                                              0xFFFFC107,
+                                            ).withValues(alpha: 0.2),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                        : null,
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        if (ride.emoji != null)
+                                          Text(
+                                            ride.emoji!,
+                                            style: const TextStyle(
+                                              fontSize: 22,
+                                              height: 1.1,
+                                            ),
+                                          )
+                                        else if (ride.icon != null)
+                                          Icon(
+                                            ride.icon,
+                                            size: 24,
+                                            color:
+                                                isSelected
+                                                    ? const Color(0xFFFFC107)
+                                                    : Colors.grey.shade400,
+                                          ),
+                                        const SizedBox(height: 5),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            ride.name,
+                                            style: TextStyle(
+                                              color:
+                                                  isSelected
+                                                      ? Colors.white
+                                                      : Colors.grey.shade300,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            hasLocs
+                                                ? '\$${farePreview.toStringAsFixed(farePreview >= 100 ? 0 : 2)}'
+                                                : 'x${ride.priceMultiplier}',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              color:
+                                                  isSelected
+                                                      ? const Color(0xFFFFC107)
+                                                      : Colors.grey.shade400,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (ride.badge != null)
+                                    Positioned(
+                                      top: -3,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 1.5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              ride.badgeColor ??
+                                              (isSelected
+                                                  ? const Color(0xFFFFC107)
+                                                  : Colors.white24),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          ride.badge!,
+                                          style: TextStyle(
+                                            color:
+                                                ride.badgeColor != null
+                                                    ? Colors.white
+                                                    : (isSelected
+                                                        ? Colors.black
+                                                        : Colors.white),
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
-
 
               const SizedBox(height: 12),
 
@@ -1316,53 +1352,6 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     );
   }
 
-  Widget _buildGenderChip({
-    required String id,
-    required String label,
-    required IconData icon,
-    Color? accentColor,
-  }) {
-    final isSelected = _selectedDriverGender == id;
-    final activeColor = accentColor ?? const Color(0xFFFFC107);
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedDriverGender = id),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? activeColor.withOpacity(0.15)
-                : const Color(0xFF242424),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? activeColor : Colors.white12,
-              width: isSelected ? 1.8 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected ? activeColor : Colors.grey,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.grey.shade400,
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ── Request ride ───────────────────────────────────────────────────
   Future<void> _requestRide(BuildContext context) async {
@@ -1449,7 +1438,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
       );
       final fare = (base + extra) * selOption.priceMultiplier;
 
-      // Safe fallback for backend while 'bike' is UI-only
+      // Safe fallback for backend while 'bike' and 'female' are mapped to standard for backend dispatch
       final backendCarType = CarType.ids.contains(_selectedCarType)
           ? _selectedCarType
           : CarType.standard;
@@ -1457,7 +1446,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
       final tripData = {
         'carType': backendCarType,
         'requestedCarType': _selectedCarType,
-        'driverGenderPreference': _selectedDriverGender,
+        'driverGenderPreference':
+            _selectedCarType == 'female' ? 'female' : 'any',
         'fare': fare,
         'distance': mp.estimatedDistance,
         'duration': mp.estimatedDuration,

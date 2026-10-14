@@ -377,10 +377,13 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> with SingleTicker
   
   IconData _getCarTypeIcon(String? carType) {
     switch (carType) {
+      case CarType.bike:
+        return Icons.two_wheeler;
       case 'economy':
-        return Icons.directions_car;
       case CarType.standard:
         return Icons.directions_car;
+      case CarType.female:
+        return Icons.face_3;
       case 'premium':
         return Icons.airline_seat_recline_extra;
       case CarType.xl:

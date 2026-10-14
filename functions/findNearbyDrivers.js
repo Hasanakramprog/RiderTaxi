@@ -3,6 +3,26 @@ const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/
 const { admin, db, fcm } = require("./adminConfig"); // Use shared config
 const { getEffectiveSettings } = require("./walletCore");
 
+/**
+ * Supported vehicle classes in the dispatch system.
+ */
+const VEHICLE_TYPES = Object.freeze({
+  BIKE: "bike",
+  STANDARD: "standard",
+  FEMALE: "female",
+  XL: "xl",
+  VIP: "vip",
+});
+
+/**
+ * Supported gender values for matching.
+ */
+const GENDER = Object.freeze({
+  ANY: "any",
+  FEMALE: "female",
+  MALE: "male",
+});
+
 // Initialize admin if not already initialized
 // if (!admin.apps.length) {
 //   admin.initializeApp();
@@ -118,6 +138,12 @@ function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
 // Extracted so it can be reused in Promise.all() broadcast.
 // eslint-disable-next-line require-jsdoc
 function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
+  const requestedType = tripData.requestedCarType || tripData.carType || VEHICLE_TYPES.STANDARD;
+  const isFemaleTrip =
+    tripData.driverGenderPreference === GENDER.FEMALE ||
+    requestedType === VEHICLE_TYPES.FEMALE;
+  const isBikeTrip = requestedType === VEHICLE_TYPES.BIKE || tripData.carType === VEHICLE_TYPES.BIKE;
+
   const messageData = {
     tripId: tripId,
     pickupAddress: tripData.pickup.address || "Unknown location",
@@ -129,6 +155,9 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
     estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
     expiresIn: "20", // Driver has 20 seconds to respond
     notificationType: "tripRequest",
+    carType: tripData.carType || VEHICLE_TYPES.STANDARD,
+    requestedCarType: requestedType,
+    driverGenderPreference: tripData.driverGenderPreference || GENDER.ANY,
     notificationTime: tripData.notificationTime ?
       tripData.notificationTime.toMillis().toString() :
       Date.now().toString(),
@@ -166,8 +195,22 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
     messageData.totalWaitingTime = "0";
   }
 
+  // Build notification title based on ride class
+  let notificationTitle = "New Trip Request";
+  if (isBikeTrip) {
+    notificationTitle = "🛵 New Bike Trip Request";
+  } else if (isFemaleTrip) {
+    notificationTitle = "🧕 New Women Trip Request";
+  }
+
   // Build notification body
-  let notificationBody = `New pickup request (${driver.distance.toFixed(1)}km away)`;
+  let notificationBody = `New pickup (${driver.distance.toFixed(1)}km away)`;
+  if (isBikeTrip) {
+    notificationBody = `Bike pickup (${driver.distance.toFixed(1)}km away)`;
+  } else if (isFemaleTrip) {
+    notificationBody = `Women ride (${driver.distance.toFixed(1)}km away)`;
+  }
+
   if (tripData.stops && tripData.stops.length > 0) {
     // eslint-disable-next-line max-len
     notificationBody += ` with ${tripData.stops.length} stop${tripData.stops.length > 1 ? "s" : ""}`;
@@ -180,7 +223,7 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
   return {
     token: driver.fcmToken,
     notification: {
-      title: "New Trip Request",
+      title: notificationTitle,
       body: notificationBody,
     },
     data: messageData,
@@ -219,9 +262,23 @@ async function findDriversForTrip(tripId, tripData) {
       .where("isAvailable", "==", true)
       .where("walletCanWork", "==", true);
 
+    const isFemaleRequested =
+      tripData.requestedCarType === VEHICLE_TYPES.FEMALE ||
+      tripData.driverGenderPreference === GENDER.FEMALE ||
+      tripData.carType === VEHICLE_TYPES.FEMALE;
 
-    // If carType filter is present on trip
-    if (tripData.carType) {
+    const isBikeRequested =
+      tripData.requestedCarType === VEHICLE_TYPES.BIKE ||
+      tripData.carType === VEHICLE_TYPES.BIKE;
+
+    if (isFemaleRequested) {
+      // 👩‍🦰 Query verified female drivers for women-only trips
+      driversQuery = driversQuery.where("gender", "==", GENDER.FEMALE);
+    } else if (isBikeRequested) {
+      // 🛵 Only two-wheeler drivers
+      driversQuery = driversQuery.where("carType", "==", VEHICLE_TYPES.BIKE);
+    } else if (tripData.carType) {
+      // 🚗 Standard, XL, or VIP
       driversQuery = driversQuery.where("carType", "==", tripData.carType);
     }
 
@@ -243,6 +300,26 @@ async function findDriversForTrip(tripId, tripData) {
     driversSnapshot.forEach((doc) => {
       const driverData = doc.data();
       const driverId = doc.id;
+
+      // ── Safety Guard: Ensure female trip receives ONLY female drivers ──────
+      if (isFemaleRequested && driverData.gender !== GENDER.FEMALE) {
+        console.warn(`[Dispatch] Driver ${driverId} rejected: Non-female driver for female trip.`);
+        return;
+      }
+
+      // ── Safety Guard: Ensure bike trip receives ONLY bike drivers ───────────
+      if (isBikeRequested && driverData.carType !== VEHICLE_TYPES.BIKE) {
+        console.warn(`[Dispatch] Driver ${driverId} rejected: Non-bike driver for bike trip.`);
+        return;
+      }
+
+      // ── Safety Guard: Female tier vehicle class compatibility ─────────────
+      if (isFemaleRequested) {
+        const allowedCarTypes = [VEHICLE_TYPES.STANDARD, VEHICLE_TYPES.FEMALE];
+        if (driverData.carType && !allowedCarTypes.includes(driverData.carType)) {
+          return;
+        }
+      }
 
       // Check if driver has valid location
       if (driverData.location &&

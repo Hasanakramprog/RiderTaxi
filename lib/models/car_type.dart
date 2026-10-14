@@ -7,11 +7,13 @@ import 'package:flutter/material.dart';
 /// and are stored in Firestore as `trips.carType` and `drivers.carType`.
 /// Never rename an id without updating all three places and migrating data.
 class CarType {
+  static const String bike = 'bike';
   static const String standard = 'standard';
+  static const String female = 'female';
   static const String xl = 'xl';
   static const String vip = 'vip';
 
-  static const List<String> ids = [standard, xl, vip];
+  static const List<String> ids = [bike, standard, female, xl, vip];
   static const String defaultId = standard;
 
   final String id;
@@ -30,9 +32,23 @@ class CarType {
 
   static const List<CarType> all = [
     CarType(
+      id: bike,
+      name: 'Bike',
+      icon: Icons.two_wheeler,
+      capacity: '1 seat',
+      priceMultiplier: 0.65,
+    ),
+    CarType(
       id: standard,
       name: 'Standard',
       icon: Icons.directions_car,
+      capacity: '4 seats',
+      priceMultiplier: 1.0,
+    ),
+    CarType(
+      id: female,
+      name: 'Female',
+      icon: Icons.face_3,
       capacity: '4 seats',
       priceMultiplier: 1.0,
     ),
@@ -54,5 +70,5 @@ class CarType {
 
   /// Returns the matching CarType, or [standard] if the id is unknown.
   static CarType byId(String? id) =>
-      all.firstWhere((c) => c.id == id, orElse: () => all.first);
+      all.firstWhere((c) => c.id == id, orElse: () => all.firstWhere((c) => c.id == standard));
 }
