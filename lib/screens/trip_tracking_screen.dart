@@ -2942,8 +2942,8 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
           top: BorderSide(color: Color(0x10FFFFFF)),
-          left: BorderSide(color: Color(0x08FFFFFF)),
-          right: BorderSide(color: Color(0x08FFFFFF)),
+          left: BorderSide(color: Color(0x10FFFFFF)),
+          right: BorderSide(color: Color(0x10FFFFFF)),
         ),
         boxShadow: [
           BoxShadow(
