@@ -24,14 +24,15 @@ const LEDGER_REASONS = Object.freeze({
 
 /**
  * Computes chargeable allowance cents for a trip.
- * Currently only completed trips are charged their full final fare (excluding tips if separated).
+ * Currently only completed trips are charged their full final fare
+ * (excluding tips if separated).
  *
  * @param {object} trip - The trip document data.
- * @returns {{ cents: number, reason: string }}
+ * @return {object} Charge result { cents: number, reason: string }
  */
 function computeChargeableCents(trip) {
   if (!trip) {
-    return { cents: 0, reason: LEDGER_REASONS.NO_FARE };
+    return {cents: 0, reason: LEDGER_REASONS.NO_FARE};
   }
 
   const status = trip.status;
@@ -42,20 +43,20 @@ function computeChargeableCents(trip) {
     const rawFare = Number(trip.fare != null ? trip.fare : trip.finalFare);
 
     if (isNaN(rawFare) || rawFare <= 0) {
-      return { cents: 0, reason: LEDGER_REASONS.NO_FARE };
+      return {cents: 0, reason: LEDGER_REASONS.NO_FARE};
     }
 
     // Convert fare to integer cents
     const cents = Math.round(rawFare * 100);
-    return { cents, reason: LEDGER_REASONS.COMPLETED };
+    return {cents, reason: LEDGER_REASONS.COMPLETED};
   }
 
   if (status === "cancelled") {
     // Phase 1: Cancelled trips are not charged
-    return { cents: 0, reason: LEDGER_REASONS.CANCELLED_NO_CHARGE };
+    return {cents: 0, reason: LEDGER_REASONS.CANCELLED_NO_CHARGE};
   }
 
-  return { cents: 0, reason: "unhandled_status" };
+  return {cents: 0, reason: "unhandled_status"};
 }
 
 module.exports = {

@@ -1,6 +1,6 @@
 # Cloud Tasks Dispatch (Replace `sleep` Loop) — Planned Update
 
-> **Status:** Planned (not implemented yet)
+> **Status:** Implemented
 > **Target file:** `functions/findNearbyDrivers.js`
 > **Related:** `CLOUD_FUNCTION_DISPATCH_MIGRATION.md`, `updates/IDEMPOTENT_DISPATCH_LOCK.md`
 

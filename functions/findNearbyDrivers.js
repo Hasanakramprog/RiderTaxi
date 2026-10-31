@@ -1,7 +1,12 @@
-// eslint-disable-next-line max-len
-const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { admin, db, fcm } = require("./adminConfig"); // Use shared config
-const { getEffectiveSettings } = require("./walletCore");
+const {getFunctions} = require("firebase-admin/functions");
+const {onTaskDispatched} = require("firebase-functions/v2/tasks");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
+const crypto = require("crypto");
+const {admin, db, fcm} = require("./adminConfig");
+const {getEffectiveSettings} = require("./walletCore");
 
 /**
  * Supported vehicle classes in the dispatch system.
@@ -23,13 +28,17 @@ const GENDER = Object.freeze({
   MALE: "male",
 });
 
-// Initialize admin if not already initialized
-// if (!admin.apps.length) {
-//   admin.initializeApp();
-// }
-
-// const db = admin.firestore();
-// const fcm = admin.messaging();
+/**
+ * Configuration for Cloud Tasks chained dispatch rounds.
+ */
+const DISPATCH_CONFIG = Object.freeze({
+  MAX_SEARCH_DURATION_MS: 120 * 1000,
+  ROUND_DELAY_SECONDS: 15,
+  DEFAULT_RADIUS_KM: 5,
+  EXPANDED_RADIUS_KM: 8,
+  EXPAND_AFTER_MS: 45 * 1000,
+  TOP_DRIVERS_PER_ROUND: 3,
+});
 
 /**
  * Logs debug information with a formatted label.
@@ -65,7 +74,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  return R * c; // Distance in km
+  return R * c;
 }
 
 /**
@@ -86,7 +95,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
  */
 function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
   // 1. Distance Score (0-50 points)
-  // Closer drivers get more points. 10km+ = 0 points
   const distanceScore = Math.max(0, 50 - (distance * 5));
 
   // 2. Tier Bonus (0-15 points)
@@ -97,15 +105,13 @@ function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
     "bronze": 0,
   };
   const tier = driver.metrics?.tier || "silver";
-  const tierScore = tierBonuses[tier] || 5;
+  const tierScore = tierBonuses[tier] !== undefined ? tierBonuses[tier] : 5;
 
   // 3. Acceptance Rate Score (0-20 points)
-  // 100% acceptance = 20 points
   const acceptanceRate = driver.metrics?.acceptanceRate || 0;
   const acceptanceScore = (acceptanceRate / 100) * 20;
 
   // 4. User Rating Score (0-15 points)
-  // 5 stars = 15 points
   const userRating = driver.rating || 0;
   const ratingScore = (userRating / 5) * 15;
 
@@ -120,7 +126,6 @@ function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
     rating: userRating,
     reliabilityScore: driver.metrics?.reliabilityScore || 0,
     priorityScore: totalScore,
-    // Score breakdown for debugging
     scoreBreakdown: {
       distance: distanceScore.toFixed(1),
       tier: tierScore,
@@ -133,38 +138,52 @@ function calculateDriverPriority(driver, pickupLat, pickupLng, distance) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Builds the FCM message payload for a single driver.
-// Extracted so it can be reused in Promise.all() broadcast.
-// eslint-disable-next-line require-jsdoc
+/**
+ * Builds the FCM message payload for a single driver.
+ *
+ * @param {object} driver - Candidate driver with priority and distance info.
+ * @param {string} tripId - Firestore trip ID.
+ * @param {object} tripData - Trip document data.
+ * @param {number} pickupLat - Pickup latitude.
+ * @param {number} pickupLng - Pickup longitude.
+ * @return {object} FCM message payload.
+ */
 function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
-  const requestedType = tripData.requestedCarType || tripData.carType || VEHICLE_TYPES.STANDARD;
+  const requestedType =
+    tripData.requestedCarType || tripData.carType || VEHICLE_TYPES.STANDARD;
   const isFemaleTrip =
     tripData.driverGenderPreference === GENDER.FEMALE ||
     requestedType === VEHICLE_TYPES.FEMALE;
-  const isBikeTrip = requestedType === VEHICLE_TYPES.BIKE || tripData.carType === VEHICLE_TYPES.BIKE;
+  const isBikeTrip =
+    requestedType === VEHICLE_TYPES.BIKE ||
+    tripData.carType === VEHICLE_TYPES.BIKE;
 
   const messageData = {
     tripId: tripId,
-    pickupAddress: tripData.pickup.address || "Unknown location",
+    pickupAddress: tripData.pickup?.address || "Unknown location",
     pickupLatitude: pickupLat.toString(),
     pickupLongitude: pickupLng.toString(),
-    dropoffAddress: tripData.dropoff.address || "Unknown destination",
+    dropoffAddress: tripData.dropoff?.address || "Unknown destination",
     fare: tripData.fare ? tripData.fare.toString() : "0",
     distance: tripData.distance ? tripData.distance.toString() : "0",
     estimatedDuration: tripData.duration ? tripData.duration.toString() : "0",
-    expiresIn: "20", // Driver has 20 seconds to respond
+    expiresIn: "20",
     notificationType: "tripRequest",
     carType: tripData.carType || VEHICLE_TYPES.STANDARD,
     requestedCarType: requestedType,
     driverGenderPreference: tripData.driverGenderPreference || GENDER.ANY,
-    notificationTime: tripData.notificationTime ?
+    notificationTime: tripData.notificationTime &&
+      typeof tripData.notificationTime.toMillis === "function" ?
       tripData.notificationTime.toMillis().toString() :
       Date.now().toString(),
   };
 
   // Add stops information (up to 5 — FCM has message size limits)
-  if (tripData.stops && Array.isArray(tripData.stops) && tripData.stops.length > 0) {
+  if (
+    tripData.stops &&
+    Array.isArray(tripData.stops) &&
+    tripData.stops.length > 0
+  ) {
     const stopsCount = tripData.stops.length;
     messageData.hasStops = "true";
     messageData.stopsCount = stopsCount.toString();
@@ -173,14 +192,15 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
     for (let i = 0; i < maxStops; i++) {
       const stop = tripData.stops[i];
       if (stop) {
-        messageData[`stop${i + 1}Address`] = stop.address || "Unknown stop location";
+        const stopAddr = stop.address || "Unknown stop location";
+        messageData[`stop${i + 1}Address`] = stopAddr;
         if (stop.latitude && stop.longitude) {
           messageData[`stop${i + 1}Latitude`] = stop.latitude.toString();
           messageData[`stop${i + 1}Longitude`] = stop.longitude.toString();
         }
         if (stop.waitingTime !== undefined) {
           messageData[`stop${i + 1}WaitingTime`] = stop.waitingTime.toString();
-          totalWaitingTime += parseInt(stop.waitingTime) || 0;
+          totalWaitingTime += parseInt(stop.waitingTime, 10) || 0;
         } else {
           messageData[`stop${i + 1}WaitingTime`] = "0";
         }
@@ -195,7 +215,6 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
     messageData.totalWaitingTime = "0";
   }
 
-  // Build notification title based on ride class
   let notificationTitle = "New Trip Request";
   if (isBikeTrip) {
     notificationTitle = "🛵 New Bike Trip Request";
@@ -203,7 +222,6 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
     notificationTitle = "🧕 New Women Trip Request";
   }
 
-  // Build notification body
   let notificationBody = `New pickup (${driver.distance.toFixed(1)}km away)`;
   if (isBikeTrip) {
     notificationBody = `Bike pickup (${driver.distance.toFixed(1)}km away)`;
@@ -212,9 +230,10 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
   }
 
   if (tripData.stops && tripData.stops.length > 0) {
-    // eslint-disable-next-line max-len
-    notificationBody += ` with ${tripData.stops.length} stop${tripData.stops.length > 1 ? "s" : ""}`;
-    const totalWaitingMinutes = parseInt(messageData.totalWaitingTime) || 0;
+    const stopCount = tripData.stops.length;
+    const plural = stopCount > 1 ? "s" : "";
+    notificationBody += ` with ${stopCount} stop${plural}`;
+    const totalWaitingMinutes = parseInt(messageData.totalWaitingTime, 10) || 0;
     if (totalWaitingMinutes > 0) {
       notificationBody += ` (${totalWaitingMinutes} min waiting)`;
     }
@@ -230,178 +249,193 @@ function buildMessage(driver, tripId, tripData, pickupLat, pickupLng) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper function to find nearby drivers
-// eslint-disable-next-line require-jsdoc
-async function findDriversForTrip(tripId, tripData) {
-  try {
-    logDebug("Processing trip", { tripId, tripStatus: tripData.status });
+/**
+ * Finds eligible drivers for a trip within a given radius, excluding any
+ * drivers already notified or who explicitly declined.
+ *
+ * Preserves wallet balance + overdraft checks, vehicle/gender filters,
+ * and priority scoring.
+ *
+ * @param {string} tripId - Trip document ID.
+ * @param {object} tripData - Current trip document data.
+ * @param {number} searchRadiusKm - Search radius in kilometers.
+ * @param {Set<string>} excludedDriverIds - Set of driver IDs to exclude.
+ * @return {Promise<Array<object>>} Sorted list of eligible priority drivers.
+ */
+async function findEligibleDriversForTrip(
+    tripId,
+    tripData,
+    searchRadiusKm,
+    excludedDriverIds = new Set(),
+) {
+  if (
+    !tripData.pickup ||
+    typeof tripData.pickup.latitude !== "number" ||
+    typeof tripData.pickup.longitude !== "number"
+  ) {
+    console.warn(`[Dispatch] Trip ${tripId} missing valid pickup coordinates.`);
+    return [];
+  }
 
-    // Only process trips with 'searching' status
-    if (tripData.status !== "searching") {
-      logDebug("Trip not in searching status", { status: tripData.status });
-      return null;
-    }
+  const pickupLat = tripData.pickup.latitude;
+  const pickupLng = tripData.pickup.longitude;
 
-    console.log(`Finding drivers for trip ${tripId}`);
+  // 1. Read app_settings/wallet once per invocation
+  const settingsDoc = await db.collection("app_settings").doc("wallet").get();
+  const walletSettings = getEffectiveSettings(
+      settingsDoc.exists ? settingsDoc.data() : null,
+  );
 
-    // Get pickup coordinates
-    const pickupLat = tripData.pickup.latitude;
-    const pickupLng = tripData.pickup.longitude;
-
-    // Define search radius (in km)
-    const searchRadius = 5;
-
-    // 1. Read app_settings/wallet once per invocation (section 4.4)
-    const settingsDoc = await db.collection("app_settings").doc("wallet").get();
-    const walletSettings = getEffectiveSettings(settingsDoc.data());
-
-    // 2. Query for available drivers with walletCanWork == true
-    let driversQuery = db.collection("drivers")
+  // 2. Query for available drivers with walletCanWork == true
+  let driversQuery = db.collection("drivers")
       .where("isOnline", "==", true)
       .where("isAvailable", "==", true)
       .where("walletCanWork", "==", true);
 
-    const isFemaleRequested =
-      tripData.requestedCarType === VEHICLE_TYPES.FEMALE ||
-      tripData.driverGenderPreference === GENDER.FEMALE ||
-      tripData.carType === VEHICLE_TYPES.FEMALE;
+  const isFemaleRequested =
+    tripData.requestedCarType === VEHICLE_TYPES.FEMALE ||
+    tripData.driverGenderPreference === GENDER.FEMALE ||
+    tripData.carType === VEHICLE_TYPES.FEMALE;
 
-    const isBikeRequested =
-      tripData.requestedCarType === VEHICLE_TYPES.BIKE ||
-      tripData.carType === VEHICLE_TYPES.BIKE;
+  const isBikeRequested =
+    tripData.requestedCarType === VEHICLE_TYPES.BIKE ||
+    tripData.carType === VEHICLE_TYPES.BIKE;
 
+  if (isFemaleRequested) {
+    driversQuery = driversQuery.where("gender", "==", GENDER.FEMALE);
+  } else if (isBikeRequested) {
+    driversQuery = driversQuery.where("carType", "==", VEHICLE_TYPES.BIKE);
+  } else if (tripData.carType) {
+    driversQuery = driversQuery.where("carType", "==", tripData.carType);
+  }
+
+  const driversSnapshot = await driversQuery.get();
+  if (driversSnapshot.empty) {
+    console.log(
+        `[Dispatch] Trip ${tripId}: No online drivers with walletCanWork.`,
+    );
+    return [];
+  }
+
+  // 3. Filter by exclusion set, safety guards, and search radius
+  const candidatesInRadius = [];
+
+  driversSnapshot.forEach((doc) => {
+    const driverData = doc.data();
+    const driverId = doc.id;
+
+    // Exclude already-notified or declined drivers
+    if (excludedDriverIds && excludedDriverIds.has(driverId)) {
+      return;
+    }
+
+    // Safety Guard: Ensure female trip receives ONLY female drivers
+    if (isFemaleRequested && driverData.gender !== GENDER.FEMALE) {
+      console.warn(
+          `[Dispatch] Driver ${driverId} rejected: Non-female for female trip.`,
+      );
+      return;
+    }
+
+    // Safety Guard: Ensure bike trip receives ONLY bike drivers
+    if (isBikeRequested && driverData.carType !== VEHICLE_TYPES.BIKE) {
+      console.warn(
+          `[Dispatch] Driver ${driverId} rejected: Non-bike for bike trip.`,
+      );
+      return;
+    }
+
+    // Safety Guard: Female tier vehicle class compatibility
     if (isFemaleRequested) {
-      // 👩‍🦰 Query verified female drivers for women-only trips
-      driversQuery = driversQuery.where("gender", "==", GENDER.FEMALE);
-    } else if (isBikeRequested) {
-      // 🛵 Only two-wheeler drivers
-      driversQuery = driversQuery.where("carType", "==", VEHICLE_TYPES.BIKE);
-    } else if (tripData.carType) {
-      // 🚗 Standard, XL, or VIP
-      driversQuery = driversQuery.where("carType", "==", tripData.carType);
-    }
-
-    const driversSnapshot = await driversQuery.get();
-
-    if (driversSnapshot.empty) {
-      console.log("No available drivers found with walletCanWork == true");
-      // You might want to update the trip status here
-      await db.collection("trips").doc(tripId).update({
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        noDriversAvailable: true,
-      });
-      return null;
-    }
-
-    // Calculate distance and filter drivers within search radius
-    const candidatesInRadius = [];
-
-    driversSnapshot.forEach((doc) => {
-      const driverData = doc.data();
-      const driverId = doc.id;
-
-      // ── Safety Guard: Ensure female trip receives ONLY female drivers ──────
-      if (isFemaleRequested && driverData.gender !== GENDER.FEMALE) {
-        console.warn(`[Dispatch] Driver ${driverId} rejected: Non-female driver for female trip.`);
+      const allowedCarTypes = [VEHICLE_TYPES.STANDARD, VEHICLE_TYPES.FEMALE];
+      if (
+        driverData.carType &&
+        !allowedCarTypes.includes(driverData.carType)
+      ) {
         return;
       }
+    }
 
-      // ── Safety Guard: Ensure bike trip receives ONLY bike drivers ───────────
-      if (isBikeRequested && driverData.carType !== VEHICLE_TYPES.BIKE) {
-        console.warn(`[Dispatch] Driver ${driverId} rejected: Non-bike driver for bike trip.`);
-        return;
-      }
-
-      // ── Safety Guard: Female tier vehicle class compatibility ─────────────
-      if (isFemaleRequested) {
-        const allowedCarTypes = [VEHICLE_TYPES.STANDARD, VEHICLE_TYPES.FEMALE];
-        if (driverData.carType && !allowedCarTypes.includes(driverData.carType)) {
-          return;
-        }
-      }
-
-      // Check if driver has valid location
-      if (driverData.location &&
-        driverData.location.latitude &&
-        driverData.location.longitude) {
-        const distance = calculateDistance(
+    if (
+      driverData.location &&
+      typeof driverData.location.latitude === "number" &&
+      typeof driverData.location.longitude === "number"
+    ) {
+      const distance = calculateDistance(
           pickupLat,
           pickupLng,
           driverData.location.latitude,
           driverData.location.longitude,
-        );
+      );
 
-        // Only include drivers within the search radius
-        if (distance <= searchRadius) {
-          candidatesInRadius.push({
-            driverId,
-            driverData,
-            distance,
-          });
-        }
+      if (distance <= searchRadiusKm) {
+        candidatesInRadius.push({
+          driverId,
+          driverData,
+          distance,
+        });
       }
-    });
-
-    if (candidatesInRadius.length === 0) {
-      console.log("No drivers within search radius");
-      await db.collection("trips").doc(tripId).update({
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        noDriversAvailable: true,
-      });
-      return null;
     }
+  });
 
-    // 3. Batch load driver_wallets for in-radius candidates and enforce balance + overdraft eligibility
-    const rawFare = Number(tripData.fare || tripData.estimatedFare || 0);
-    const estimateFareCents = Math.round(rawFare * 100);
-    const requiredAllowanceCents = Math.round(
+  if (candidatesInRadius.length === 0) {
+    console.log(
+        `[Dispatch] Trip ${tripId}: No new candidates within ` +
+        `${searchRadiusKm}km radius.`,
+    );
+    return [];
+  }
+
+  // 4. Batch-load driver_wallets and enforce balance + overdraft eligibility
+  const rawFare = Number(tripData.fare || tripData.estimatedFare || 0);
+  const estimateFareCents = Math.round(rawFare * 100);
+  const requiredAllowanceCents = Math.round(
       estimateFareCents * walletSettings.dispatchBufferMultiplier,
-    );
+  );
 
-    const walletRefs = candidatesInRadius.map((c) =>
-      db.collection("driver_wallets").doc(c.driverId),
-    );
-    const walletDocs = await db.getAll(...walletRefs);
-    const walletMap = new Map();
-    walletDocs.forEach((doc) => {
-      if (doc.exists) walletMap.set(doc.id, doc.data());
-    });
+  const walletRefs = candidatesInRadius.map((c) =>
+    db.collection("driver_wallets").doc(c.driverId),
+  );
+  const walletDocs = await db.getAll(...walletRefs);
+  const walletMap = new Map();
+  walletDocs.forEach((doc) => {
+    if (doc.exists) walletMap.set(doc.id, doc.data());
+  });
 
-    const eligibleCandidates = [];
-    for (const candidate of candidatesInRadius) {
-      const wallet = walletMap.get(candidate.driverId);
-      if (!wallet) {
-        console.warn(`Candidate ${candidate.driverId} has no wallet document. Excluded.`);
-        continue;
-      }
-
-      const balanceCents = wallet.balanceCents || 0;
-      const overdraftLimit = walletSettings.overdraftLimitCents;
-      const totalAvailable = balanceCents + overdraftLimit;
-
-      if (totalAvailable >= requiredAllowanceCents) {
-        eligibleCandidates.push(candidate);
-      } else {
-        console.log(
-          `Candidate ${candidate.driverId} insufficient wallet allowance: available=${totalAvailable}c, required=${requiredAllowanceCents}c`,
-        );
-      }
+  const eligibleCandidates = [];
+  for (const candidate of candidatesInRadius) {
+    const wallet = walletMap.get(candidate.driverId);
+    if (!wallet) {
+      console.warn(
+          `[Dispatch] Candidate ${candidate.driverId} has no wallet doc.`,
+      );
+      continue;
     }
 
-    if (eligibleCandidates.length === 0) {
-      console.log("No drivers have sufficient wallet balance for trip fare");
-      await db.collection("trips").doc(tripId).update({
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        noDriversAvailable: true,
-        noDriversReason: "insufficient_balance",
-      });
-      return null;
-    }
+    const balanceCents = wallet.balanceCents || 0;
+    const overdraftLimit = walletSettings.overdraftLimitCents;
+    const totalAvailable = balanceCents + overdraftLimit;
 
-    // 4. Calculate priority score for eligible drivers
-    const driversWithPriority = eligibleCandidates.map((c) => {
-      return calculateDriverPriority(
+    if (totalAvailable >= requiredAllowanceCents) {
+      eligibleCandidates.push(candidate);
+    } else {
+      console.log(
+          `[Dispatch] Candidate ${candidate.driverId} insufficient wallet: ` +
+          `available=${totalAvailable}c, required=${requiredAllowanceCents}c`,
+      );
+    }
+  }
+
+  if (eligibleCandidates.length === 0) {
+    console.log(
+        `[Dispatch] Trip ${tripId}: No candidates met wallet requirement.`,
+    );
+    return [];
+  }
+
+  // 5. Calculate priority scores and sort highest first
+  const driversWithPriority = eligibleCandidates.map((c) =>
+    calculateDriverPriority(
         {
           driverId: c.driverId,
           ...c.driverData,
@@ -409,131 +443,334 @@ async function findDriversForTrip(tripId, tripData) {
         pickupLat,
         pickupLng,
         c.distance,
-      );
-    });
+    ),
+  );
 
-    // Sort drivers by PRIORITY SCORE (highest first) instead of distance
-    driversWithPriority.sort((a, b) => b.priorityScore - a.priorityScore);
+  driversWithPriority.sort((a, b) => b.priorityScore - a.priorityScore);
+  return driversWithPriority;
+}
 
-    console.log(`Found ${driversWithPriority.length} eligible nearby drivers`);
+/**
+ * Broadcasts FCM trip request notifications to a batch of candidate drivers.
+ *
+ * @param {Array<object>} driversBatch - Drivers to notify in this round.
+ * @param {string} tripId - Trip document ID.
+ * @param {object} tripData - Current trip document data.
+ * @return {Promise<number>} Number of drivers successfully notified.
+ */
+async function sendNotificationsToDrivers(driversBatch, tripId, tripData) {
+  const pickupLat = tripData.pickup.latitude;
+  const pickupLng = tripData.pickup.longitude;
 
-    // ── Task 1: Broadcast to top 3 drivers simultaneously ────────────────────
-    const TOP_N = 3;
-    const topDrivers = driversWithPriority.slice(0, TOP_N);
-
-    // Log the drivers being notified
-    console.log(`Broadcasting to ${topDrivers.length} driver(s) simultaneously:`);
-    topDrivers.forEach((driver, index) => {
-      console.log(`  ${index + 1}. ${driver.driverName} (${driver.tier})`);
-      console.log(`     Priority: ${driver.priorityScore.toFixed(1)} pts | Distance: ${driver.distance.toFixed(2)}km`);
-      console.log(`     Breakdown: ${JSON.stringify(driver.scoreBreakdown)}`);
-    });
-
-    // ── Write trip document: store all notified drivers + initialize the race lock
-    //
-    // claimedByDriverId starts as null ("door is unlocked").
-    // The driver app must run a Firestore Transaction that:
-    //   1. Reads claimedByDriverId
-    //   2. If null  → sets it to the driver's own ID (claims the trip)
-    //   3. If not null → throws "already claimed" (another driver won the race)
-    // This guarantees exactly one driver gets the trip, even if all 3 tap
-    // Accept at the exact same millisecond.
-    await db.collection("trips").doc(tripId).update({
-      nearbyDrivers: driversWithPriority.map((d) => ({
-        driverId: d.driverId,
-        distance: d.distance,
-        tier: d.tier,
-        priorityScore: d.priorityScore,
-        acceptanceRate: d.acceptanceRate,
-      })),
-      notifiedDriverIds: topDrivers.map((d) => d.driverId), // array — all 3 notified
-      claimedByDriverId: null,                              // race lock — null = unclaimed
-      notifiedDriverTier: topDrivers[0].tier,
-      notifiedDriverPriority: topDrivers[0].priorityScore,
-      notificationTime: admin.firestore.FieldValue.serverTimestamp(),
-      status: "driver_notified",
-    });
-
-    // ── Send FCM notifications to all top drivers in parallel ─────────────────
-    const notifyResults = await Promise.allSettled(
-      topDrivers
-        .filter((driver) => driver.fcmToken) // skip drivers with no token
-        .map(async (driver) => {
-          const message = buildMessage(driver, tripId, tripData, pickupLat, pickupLng);
-          await fcm.send(message);
-          console.log(
-            `✓ Notified driver ${driver.driverId} (${driver.tier}, ` +
-            `${driver.priorityScore.toFixed(1)}pts, ${driver.distance.toFixed(2)}km)`,
-          );
-        }),
+  console.log(
+      `[Dispatch] Broadcasting trip ${tripId} to ` +
+      `${driversBatch.length} driver(s):`,
+  );
+  driversBatch.forEach((driver, index) => {
+    console.log(
+        `  ${index + 1}. ${driver.driverName} (${driver.tier}) | ` +
+        `Score: ${driver.priorityScore.toFixed(1)} | ` +
+        `Dist: ${driver.distance.toFixed(2)}km`,
     );
+  });
 
-    // Log any send failures without crashing the function
-    notifyResults.forEach((result, i) => {
-      if (result.status === "rejected") {
-        console.error(`✗ Failed to notify driver at index ${i}:`, result.reason);
-      }
-    });
+  const notifyResults = await Promise.allSettled(
+      driversBatch
+          .filter((driver) => driver.fcmToken)
+          .map(async (driver) => {
+            const message = buildMessage(
+                driver,
+                tripId,
+                tripData,
+                pickupLat,
+                pickupLng,
+            );
+            await fcm.send(message);
+            console.log(
+                `✓ Notified driver ${driver.driverId} (${driver.tier}, ` +
+                `${driver.priorityScore.toFixed(1)}pts, ` +
+                `${driver.distance.toFixed(2)}km)`,
+            );
+          }),
+  );
 
-    const successCount = notifyResults.filter((r) => r.status === "fulfilled").length;
-    console.log(`Broadcast complete: ${successCount}/${topDrivers.length} drivers notified successfully.`);
+  notifyResults.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(
+          `✗ Failed to notify driver at index ${i}:`,
+          result.reason,
+      );
+    }
+  });
 
-    return null;
+  const successCount = notifyResults.filter(
+      (r) => r.status === "fulfilled",
+  ).length;
+  console.log(
+      `[Dispatch] Broadcast complete: ${successCount}/${driversBatch.length} ` +
+      `notified.`,
+  );
+  return successCount;
+}
+
+/**
+ * Claims a single dispatch round inside a Firestore transaction to guarantee
+ * idempotency across at-least-once event/task deliveries.
+ *
+ * @param {string} tripId - Trip document ID.
+ * @param {string} sessionId - Active dispatch session UUID.
+ * @param {number} round - Round number (1..N).
+ * @return {Promise<boolean>} True if round was claimed; false if duplicate.
+ */
+async function claimRound(tripId, sessionId, round) {
+  const ref = db.collection("trips").doc(tripId);
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return false;
+
+    const d = snap.data().dispatch || {};
+
+    // A newer search session (TRY AGAIN) replaced this one -> stale, stop
+    if (d.sessionId && d.sessionId !== sessionId) return false;
+
+    // This round (or a later one) was already claimed -> duplicate, stop
+    if ((d.lastRound || 0) >= round) return false;
+
+    tx.update(ref, {dispatch: {sessionId, lastRound: round}});
+    return true;
+  });
+}
+
+/**
+ * Enqueues the next dispatch round in Cloud Tasks with task-name deduplication.
+ *
+ * @param {string} tripId - Trip document ID.
+ * @param {string} sessionId - Active dispatch session UUID.
+ * @param {number} startedAt - Epoch ms when this dispatch session started.
+ * @param {number} nextRound - Next round number.
+ * @return {Promise<void>}
+ */
+async function enqueueNextRound(tripId, sessionId, startedAt, nextRound) {
+  const queue = getFunctions().taskQueue("dispatchNextRound");
+  await queue.enqueue(
+      {tripId, sessionId, startedAt, round: nextRound},
+      {
+        scheduleDelaySeconds: DISPATCH_CONFIG.ROUND_DELAY_SECONDS,
+        // Deterministic task ID prevents Cloud Tasks from accepting duplicates
+        id: `${tripId}-${sessionId}-r${nextRound}`,
+      },
+  );
+}
+
+/**
+ * Executes a single dispatch round (~1s) and schedules the next round.
+ *
+ * @param {string} tripId - Trip document ID.
+ * @param {string} sessionId - Active dispatch session UUID.
+ * @param {number} startedAt - Epoch ms when this dispatch session started.
+ * @param {number} round - Current round number (1..N).
+ * @return {Promise<void>}
+ */
+async function runDispatchRound(tripId, sessionId, startedAt, round) {
+  try {
+    // 1. Claim this round (per-round lock). Duplicate or stale -> exit.
+    const claimed = await claimRound(tripId, sessionId, round);
+    if (!claimed) {
+      console.log(
+          `[Dispatch] ${tripId} round ${round} already handled or stale, ` +
+          `skipping.`,
+      );
+      return;
+    }
+
+    const ref = db.collection("trips").doc(tripId);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const trip = snap.data();
+
+    // 2. Stop conditions
+    if (trip.status === "cancelled") {
+      console.log(`[Dispatch] Trip ${tripId} cancelled, stopping chain.`);
+      return;
+    }
+    if (
+      trip.status === "driver_accepted" ||
+      trip.status === "driver_arrived" ||
+      trip.status === "in_progress" ||
+      trip.status === "completed" ||
+      trip.claimedByDriverId
+    ) {
+      console.log(
+          `[Dispatch] Trip ${tripId} already accepted/active, stopping chain.`,
+      );
+      return;
+    }
+
+    // 3. Deadline check (120 seconds)
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > DISPATCH_CONFIG.MAX_SEARCH_DURATION_MS) {
+      console.log(
+          `[Dispatch] Trip ${tripId} reached 120s deadline. ` +
+          `Setting no_drivers_available.`,
+      );
+      await ref.update({
+        status: "no_drivers_available",
+        noDriversAvailable: true,
+        searchEndedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    // 4. Do ONE round of work
+    const radius =
+      elapsed > DISPATCH_CONFIG.EXPAND_AFTER_MS ?
+        DISPATCH_CONFIG.EXPANDED_RADIUS_KM :
+        DISPATCH_CONFIG.DEFAULT_RADIUS_KM;
+
+    // Exclude all previously notified drivers AND drivers who declined
+    const excludedDriverIds = new Set([
+      ...(trip.notifiedDriverIds || []),
+      ...(trip.declinedDriverIds || []),
+    ]);
+
+    const candidates = await findEligibleDriversForTrip(
+        tripId,
+        trip,
+        radius,
+        excludedDriverIds,
+    );
+    const batch = candidates.slice(0, DISPATCH_CONFIG.TOP_DRIVERS_PER_ROUND);
+
+    if (batch.length > 0) {
+      await ref.update({
+        nearbyDrivers: candidates.map((d) => ({
+          driverId: d.driverId,
+          distance: d.distance,
+          tier: d.tier,
+          priorityScore: d.priorityScore,
+          acceptanceRate: d.acceptanceRate,
+        })),
+        status: "driver_notified",
+        notifiedDriverIds: admin.firestore.FieldValue.arrayUnion(
+            ...batch.map((d) => d.driverId),
+        ),
+        claimedByDriverId: trip.claimedByDriverId || null,
+        notifiedDriverTier: batch[0].tier,
+        notifiedDriverPriority: batch[0].priorityScore,
+        notificationTime: admin.firestore.FieldValue.serverTimestamp(),
+        searchAttempts: round,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await sendNotificationsToDrivers(batch, tripId, trip);
+    } else {
+      await ref.update({
+        status: "searching",
+        searchAttempts: round,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 5. Schedule the next round, then EXIT
+    await enqueueNextRound(tripId, sessionId, startedAt, round + 1);
   } catch (error) {
-    console.error("Error in findDriversForTrip function:", error);
-    return null;
+    console.error(
+        `[Dispatch] Error in runDispatchRound (${tripId}, round ${round}):`,
+        error,
+    );
+    throw error;
   }
 }
 
-// Handle trip creation
-// eslint-disable-next-line max-len
-exports.findNearbyDrivers = onDocumentCreated("trips/{tripId}", async (event) => {
-  try {
-    const tripId = event.params.tripId;
-    const tripData = event.data.data();
+// ─────────────────────────────────────────────────────────────────────────────
+// Cloud Function Entry Points
+// ─────────────────────────────────────────────────────────────────────────────
 
-    logDebug("New trip created", { tripId, tripData });
+/**
+ * Entry Point 1: Triggered when a new trip document is created -> Round 1.
+ */
+exports.findNearbyDrivers = onDocumentCreated(
+    "trips/{tripId}",
+    async (event) => {
+      try {
+        const tripId = event.params.tripId;
+        const tripData = event.data ? event.data.data() : null;
+        if (!tripData) return null;
 
-    return findDriversForTrip(tripId, tripData);
-  } catch (error) {
-    console.error("Error in findNearbyDrivers onCreate function:", error);
-    return null;
-  }
-});
+        logDebug("New trip created", {tripId, status: tripData.status});
 
-// Handle trip updates (for periodic searches)
-// eslint-disable-next-line max-len
-exports.refreshNearbyDriversSearch = onDocumentUpdated("trips/{tripId}", async (event) => {
-  try {
-    const tripId = event.params.tripId;
-    const beforeData = event.data.before.data();
-    const afterData = event.data.after.data();
-    // Only trigger on searchRefreshedAt updates for searching trips
-    if (afterData.status !== "searching") {
-      return null;
-    }
+        const sessionId = crypto.randomUUID();
+        await runDispatchRound(tripId, sessionId, Date.now(), 1);
+        return null;
+      } catch (error) {
+        console.error("Error in findNearbyDrivers onCreate:", error);
+        return null;
+      }
+    },
+);
 
-    // IMPORTANT: Don't run on initial trip creation
-    // Only run when searchRefreshedAt is explicitly updated
-    if (!beforeData.searchRefreshedAt && afterData.searchRefreshedAt) {
-      console.log("Skipping refresh - this is initial trip creation");
-      return null;
-    }
+/**
+ * Entry Point 2: Cloud Tasks handler for Rounds 2..N.
+ */
+exports.dispatchNextRound = onTaskDispatched(
+    {
+      retryConfig: {maxAttempts: 3, minBackoffSeconds: 5},
+      rateLimits: {maxConcurrentDispatches: 50},
+    },
+    async (req) => {
+      const {tripId, sessionId, startedAt, round} = req.data;
+      await runDispatchRound(tripId, sessionId, startedAt, round);
+    },
+);
 
-    // Check if searchRefreshedAt was updated
-    if (!afterData.searchRefreshedAt) {
-      return null;
-    }
-    // If searchRefreshedAt existed before, make sure it changed
-    // eslint-disable-next-line max-len
-    if (beforeData.searchRefreshedAt && afterData.searchRefreshedAt.seconds === beforeData.searchRefreshedAt.seconds) {
-      return null;
-    }
-    // eslint-disable-next-line max-len
-    logDebug("Refreshing driver search", { tripId, searchAttempts: afterData.searchAttempts || 0 });
-    return findDriversForTrip(tripId, afterData);
-  } catch (error) {
-    console.error("Error in refreshNearbyDriversSearch function:", error);
-    return null;
-  }
-});
+/**
+ * Entry Point 3: Triggered when rider taps TRY AGAIN
+ * (status transitions from "no_drivers_available" -> "searching").
+ */
+exports.restartDispatch = onDocumentUpdated(
+    "trips/{tripId}",
+    async (event) => {
+      try {
+        const before = event.data.before.data();
+        const after = event.data.after.data();
+        if (
+          before.status === "no_drivers_available" &&
+          after.status === "searching"
+        ) {
+          const tripId = event.params.tripId;
+          const sessionId = crypto.randomUUID();
+          console.log(
+              `[Dispatch] Restarting dispatch for trip ${tripId} ` +
+              `with new session ${sessionId}`,
+          );
+          // Reset session and notifiedDriverIds, but preserve declinedDriverIds
+          await event.data.after.ref.update({
+            notifiedDriverIds: [],
+            dispatch: {sessionId, lastRound: 0},
+          });
+          await runDispatchRound(tripId, sessionId, Date.now(), 1);
+        }
+        return null;
+      } catch (error) {
+        console.error("Error in restartDispatch onUpdate:", error);
+        return null;
+      }
+    },
+);
+
+// Export internals for unit/simulation testing
+exports._internal = {
+  DISPATCH_CONFIG,
+  VEHICLE_TYPES,
+  GENDER,
+  calculateDistance,
+  calculateDriverPriority,
+  buildMessage,
+  findEligibleDriversForTrip,
+  sendNotificationsToDrivers,
+  claimRound,
+  enqueueNextRound,
+  runDispatchRound,
+};

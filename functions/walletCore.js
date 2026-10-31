@@ -1,6 +1,7 @@
 /**
  * walletCore.js
- * Centralized settings defaults, validation, and driver mirror field computation.
+ * Centralized settings defaults, validation, and driver mirror field
+ * computation.
  */
 
 const DEFAULT_WALLET_SETTINGS = Object.freeze({
@@ -16,37 +17,40 @@ const DEFAULT_WALLET_SETTINGS = Object.freeze({
 /**
  * Returns merged settings falling back to sensible defaults.
  * @param {object|null} data
- * @returns {object}
+ * @return {object}
  */
 function getEffectiveSettings(data) {
-  if (!data) return { ...DEFAULT_WALLET_SETTINGS };
+  if (!data) return {...DEFAULT_WALLET_SETTINGS};
 
   const commissionRate =
     typeof data.commissionRate === "number" &&
     data.commissionRate >= 0.01 &&
-    data.commissionRate <= 0.90
-      ? data.commissionRate
-      : DEFAULT_WALLET_SETTINGS.commissionRate;
+    data.commissionRate <= 0.90 ?
+      data.commissionRate :
+      DEFAULT_WALLET_SETTINGS.commissionRate;
 
   const overdraftLimitCents =
     Number.isInteger(data.overdraftLimitCents) &&
     data.overdraftLimitCents >= 0 &&
-    data.overdraftLimitCents <= 10000
-      ? data.overdraftLimitCents
-      : DEFAULT_WALLET_SETTINGS.overdraftLimitCents;
+    data.overdraftLimitCents <= 10000 ?
+      data.overdraftLimitCents :
+      DEFAULT_WALLET_SETTINGS.overdraftLimitCents;
 
   const dispatchBufferMultiplier =
     typeof data.dispatchBufferMultiplier === "number" &&
     data.dispatchBufferMultiplier >= 1.0 &&
-    data.dispatchBufferMultiplier <= 3.0
-      ? data.dispatchBufferMultiplier
-      : DEFAULT_WALLET_SETTINGS.dispatchBufferMultiplier;
+    data.dispatchBufferMultiplier <= 3.0 ?
+      data.dispatchBufferMultiplier :
+      DEFAULT_WALLET_SETTINGS.dispatchBufferMultiplier;
 
   let lowBalanceWarnCents = DEFAULT_WALLET_SETTINGS.lowBalanceWarnCents;
-  if (Array.isArray(data.lowBalanceWarnCents) && data.lowBalanceWarnCents.length > 0) {
+  if (
+    Array.isArray(data.lowBalanceWarnCents) &&
+    data.lowBalanceWarnCents.length > 0
+  ) {
     const valid = data.lowBalanceWarnCents
-      .map((x) => Number(x))
-      .filter((x) => Number.isInteger(x) && x > 0);
+        .map((x) => Number(x))
+        .filter((x) => Number.isInteger(x) && x > 0);
     if (valid.length > 0) {
       lowBalanceWarnCents = valid.sort((a, b) => b - a);
     }
@@ -58,14 +62,17 @@ function getEffectiveSettings(data) {
     dispatchBufferMultiplier,
     lowBalanceWarnCents,
     currency: typeof data.currency === "string" ? data.currency : "USD",
-    supportPhone: typeof data.supportPhone === "string" ? data.supportPhone : "",
-    supportWhatsapp: typeof data.supportWhatsapp === "string" ? data.supportWhatsapp : "",
+    supportPhone:
+      typeof data.supportPhone === "string" ? data.supportPhone : "",
+    supportWhatsapp:
+      typeof data.supportWhatsapp === "string" ? data.supportWhatsapp : "",
   };
 }
 
 /**
  * Validates payload for updating wallet settings.
  * Throws an Error with a descriptive message if invalid.
+ * @param {object} payload - The settings payload to validate.
  */
 function validateSettingsPayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -84,7 +91,9 @@ function validateSettingsPayload(payload) {
     commissionRate < 0.01 ||
     commissionRate > 0.90
   ) {
-    throw new Error("Commission rate must be between 1% (0.01) and 90% (0.90).");
+    throw new Error(
+        "Commission rate must be between 1% (0.01) and 90% (0.90).",
+    );
   }
 
   if (
@@ -92,7 +101,9 @@ function validateSettingsPayload(payload) {
     overdraftLimitCents < 0 ||
     overdraftLimitCents > 10000
   ) {
-    throw new Error("Overdraft limit must be an integer between 0 and 10,000 cents ($100).");
+    throw new Error(
+        "Overdraft limit must be an integer between 0 and 10,000 cents ($100).",
+    );
   }
 
   if (
@@ -100,7 +111,9 @@ function validateSettingsPayload(payload) {
     dispatchBufferMultiplier < 1.0 ||
     dispatchBufferMultiplier > 3.0
   ) {
-    throw new Error("Dispatch buffer multiplier must be between 1.00 and 3.00.");
+    throw new Error(
+        "Dispatch buffer multiplier must be between 1.00 and 3.00.",
+    );
   }
 
   if (
@@ -108,7 +121,10 @@ function validateSettingsPayload(payload) {
     lowBalanceWarnCents.length === 0 ||
     !lowBalanceWarnCents.every((x) => Number.isInteger(x) && x > 0)
   ) {
-    throw new Error("Low balance warnings must be a non-empty array of positive integer cents.");
+    throw new Error(
+        "Low balance warnings must be a non-empty array of positive " +
+        "integer cents.",
+    );
   }
 }
 
@@ -118,10 +134,10 @@ function validateSettingsPayload(payload) {
  *
  * @param {object} params
  * @param {number} params.balanceCents - Current driver wallet balance
- * @param {number} params.overdraftLimitCents - Current effective overdraft limit
+ * @param {number} params.overdraftLimitCents - Current effective overdraft
  * @param {boolean} params.suspended - True if driver wallet is suspended
- * @param {number[]} [params.lowBalanceWarnCents] - Array of warning thresholds
- * @returns {{ walletCanWork: boolean, walletStatus: "active"|"low"|"locked"|"suspended" }}
+ * @param {number[]} [params.lowBalanceWarnCents] - Warning thresholds
+ * @return {object} Mirror fields { walletCanWork, walletStatus }
  */
 function computeWalletMirror({
   balanceCents = 0,

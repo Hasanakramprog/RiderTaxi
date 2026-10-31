@@ -37,7 +37,9 @@ exports.onTripStatusChanged = onDocumentUpdated(
             ` in a ${afterData.carModel}` :
             "";
           title = "Driver Found! 🚗";
-          body = `${driverName}${vehicleInfo} has accepted your ride and is on the way.`;
+          body =
+            `${driverName}${vehicleInfo} has accepted your ride and ` +
+            "is on the way.";
           break;
         }
         case "driver_arrived": {
@@ -52,7 +54,9 @@ exports.onTripStatusChanged = onDocumentUpdated(
           break;
         }
         case "completed": {
-          const fare = afterData.fare ? `$${Number(afterData.fare).toFixed(2)}` : "";
+          const fare = afterData.fare ?
+            `$${Number(afterData.fare).toFixed(2)}` :
+            "";
           title = "Trip Completed 🎉";
           body = fare ?
             `You have arrived at your destination. Total fare: ${fare}.` :
@@ -124,12 +128,18 @@ exports.onTripStatusChanged = onDocumentUpdated(
           },
         };
 
-        console.log(`Sending FCM notification to rider ${riderId} for trip ${tripId} (${newStatus})`);
+        console.log(
+            `Sending FCM notification to rider ${riderId} ` +
+            `for trip ${tripId} (${newStatus})`,
+        );
         const response = await fcm.send(message);
         console.log(`Successfully sent message to rider: ${response}`);
         return response;
       } catch (error) {
-        console.error(`Error sending push notification for trip ${tripId}:`, error);
+        console.error(
+            `Error sending push notification for trip ${tripId}:`,
+            error,
+        );
 
         // Remove stale/unregistered token if device unregistered
         if (

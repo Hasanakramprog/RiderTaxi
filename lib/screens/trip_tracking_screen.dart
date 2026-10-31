@@ -48,11 +48,6 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
   bool _isStreamOnline = true;
   double _progressValue = 0.0;
 
-  static const int DRIVER_TIMEOUT_SECONDS = 60;
-
-  Timer? _searchingTimer;
-  int _searchingCount = 0;
-
   // ── Animation controllers ──────────────────────────────────────────────
   late AnimationController _pulseController;
   late AnimationController _shimmerController;
@@ -95,14 +90,6 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
       CurvedAnimation(parent: _entranceController, curve: Curves.easeOutCubic),
     );
     _entranceController.forward();
-
-    // If the screen opens in 'searching' state, start the search immediately.
-    // This avoids calling _startPeriodicDriverSearch() inside build().
-    if (_tripStatus == 'searching') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _searchingTimer == null) _startPeriodicDriverSearch();
-      });
-    }
 
     // Pulse for searching / notified states
     _pulseController = AnimationController(
@@ -201,8 +188,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
 
     switch (newStatus) {
       case 'searching':
-        // Start search from state transition, never from inside build()
-        if (_searchingTimer == null) _startPeriodicDriverSearch();
+        // Server handles autonomous dispatch via Cloud Tasks
         break;
       case 'driver_notified':
         _handleDriverNotified(tripData);
@@ -239,8 +225,6 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
     _progressUpdateTimer = null;
     _fallbackPollTimer?.cancel();
     _fallbackPollTimer = null;
-    _searchingTimer?.cancel();
-    _searchingTimer = null;
   }
 
   @override
@@ -350,6 +334,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
               onCancelTrip: _showCancelTripDialog,
               onCallDriver: _callDriver,
               onGoHome: _navigateHome,
+              onRetrySearch: _retryDriverSearch,
             ),
           ),
         ],
@@ -803,17 +788,13 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
     _startCountdownTimer(tripData);
   }
 
-  // Single consolidated countdown and progress timer
+  // Purely visual progress timer for each 15-second server dispatch round.
+  // The 2-minute search deadline is enforced autonomously on the backend.
   void _startCountdownTimer(Map<String, dynamic> tripData) {
     _progressUpdateTimer?.cancel();
     _progressUpdateTimer = null;
 
-    final notificationTime =
-        tripData['notificationTime'] != null
-            ? (tripData['notificationTime'] as Timestamp).toDate()
-            : DateTime.now();
-
-    const totalTimeout = DRIVER_TIMEOUT_SECONDS;
+    const roundDurationSeconds = 15.0;
 
     _progressUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (
       timer,
@@ -830,19 +811,20 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
         return;
       }
 
+      final currentNotificationTime =
+          _tripData?['notificationTime'] ?? tripData['notificationTime'];
+      final notificationDate =
+          currentNotificationTime is Timestamp
+              ? currentNotificationTime.toDate()
+              : DateTime.now();
+
       final elapsed =
-          DateTime.now().difference(notificationTime).inMilliseconds / 1000;
-      final progress = elapsed / totalTimeout;
+          DateTime.now().difference(notificationDate).inMilliseconds / 1000.0;
+      final progress = (elapsed / roundDurationSeconds).clamp(0.0, 1.0);
 
       setState(() {
-        _progressValue = progress > 1 ? 1.0 : progress;
+        _progressValue = progress;
       });
-
-      if (progress >= 1.0) {
-        timer.cancel();
-        _progressUpdateTimer = null;
-        _handleDriverTimeout();
-      }
     });
   }
 
@@ -894,20 +876,18 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
     print('Persistence cleared after trip cancellation');
   }
 
-  void _handleDriverTimeout() async {
-    if (!mounted || _tripStatus != 'driver_notified') return;
-
+  Future<void> _retryDriverSearch() async {
     try {
       await FirebaseFirestore.instance
           .collection('trips')
           .doc(widget.tripId)
           .update({
-            'status': 'no_drivers_available',
-            'noDriversAvailable': true,
-            'lastUpdated': FieldValue.serverTimestamp(),
+            'status': 'searching',
+            'searchStartedAt': FieldValue.serverTimestamp(),
+            'noDriversAvailable': false,
           });
     } catch (e) {
-      print('Error updating trip status on driver timeout: $e');
+      print('Error restarting driver search: $e');
     }
   }
 
@@ -1564,7 +1544,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            _searchingCount > 3
+            ((_tripData?['searchAttempts'] as num?) ?? 0) > 3
                 ? 'Taking a bit longer than usual...'
                 : 'Scanning nearby drivers in your area',
             style: TextStyle(
@@ -1578,74 +1558,6 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
         ],
       ),
     );
-  }
-
-  // Add this method to start periodic driver search
-  void _startPeriodicDriverSearch() {
-    _searchingCount = 0;
-
-    // Cancel any existing timer
-    _searchingTimer?.cancel();
-
-    // First immediate search
-    _triggerDriverSearch();
-
-    // Then set up periodic search every 10 seconds
-    _searchingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (!mounted || _tripStatus != 'searching') {
-        timer.cancel();
-        _searchingTimer = null;
-        return;
-      }
-
-      _searchingCount++;
-      _triggerDriverSearch();
-
-      // If we've been searching for a long time (e.g., 2 minutes),
-      // consider showing a timeout message or handling differently
-      if (_searchingCount > 12) {
-        // 12 x 10 seconds = 2 minutes
-        _checkForSearchTimeout();
-      }
-    });
-  }
-
-  // Add this method to trigger the cloud function search
-  Future<void> _triggerDriverSearch() async {
-    try {
-      // Trigger the cloud function by updating the trip document with a fresh timestamp
-      await FirebaseFirestore.instance
-          .collection('trips')
-          .doc(widget.tripId)
-          .update({
-            'searchRefreshedAt': FieldValue.serverTimestamp(),
-            'searchAttempts': FieldValue.increment(1),
-          });
-
-      print('Triggered driver search (attempt $_searchingCount)');
-    } catch (e) {
-      print('Error triggering driver search: $e');
-    }
-  }
-
-  // Add method to handle search timeout
-  void _checkForSearchTimeout() async {
-    // If we've been searching for too long with no results,
-    // update to no_drivers_available status
-    if (_tripStatus == 'searching') {
-      try {
-        await FirebaseFirestore.instance
-            .collection('trips')
-            .doc(widget.tripId)
-            .update({
-              'status': 'no_drivers_available',
-              'noDriversAvailable': true,
-              'searchEndedAt': FieldValue.serverTimestamp(),
-            });
-      } catch (e) {
-        print('Error updating trip status to no_drivers_available: $e');
-      }
-    }
   }
 
   Widget _buildDriverNotifiedPanel() {
@@ -2851,6 +2763,7 @@ class _TripStatusSheet extends StatefulWidget {
   final VoidCallback onCancelTrip;
   final void Function(String? phone) onCallDriver;
   final VoidCallback onGoHome;
+  final VoidCallback? onRetrySearch;
 
   const _TripStatusSheet({
     required this.tripStatus,
@@ -2859,6 +2772,7 @@ class _TripStatusSheet extends StatefulWidget {
     required this.onCancelTrip,
     required this.onCallDriver,
     required this.onGoHome,
+    this.onRetrySearch,
   });
 
   @override
@@ -3368,10 +3282,24 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 22),
-        _primaryButton(
-          label: 'Back to Home',
-          onPressed: widget.onGoHome,
-        ),
+        if (widget.onRetrySearch != null) ...[
+          _primaryButton(
+            label: 'TRY AGAIN',
+            onPressed: widget.onRetrySearch!,
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: widget.onGoHome,
+            child: const Text(
+              'Back to Home',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+          ),
+        ] else
+          _primaryButton(
+            label: 'Back to Home',
+            onPressed: widget.onGoHome,
+          ),
       ],
     );
   }
