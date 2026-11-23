@@ -62,3 +62,9 @@ macos/Flutter/GeneratedPluginRegistrant.swift
 windows/flutter/generated_plugin_registrant.cc
 windows/flutter/generated_plugin_registrant.h
 windows/flutter/generated_plugins.cmake
+
+# Apple Push Notification keys (keep private)
+*.p8
+
+# Generated Firebase web service worker (contains project config)
+web/firebase-messaging-sw.js

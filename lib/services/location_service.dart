@@ -104,51 +104,60 @@ class LocationService {
     }
   }
 
-  // Search for places using Google Places API
+  // Search for places using Google Places API (New)
   Future<List<LocationModel>> searchPlaces(String query) async {
     try {
       final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-        '?input=$query'
-        '&types=geocode'
-        '&key=$_googleApiKey',
+        'https://places.googleapis.com/v1/places:autocomplete',
       );
 
-      final response = await http.get(url);
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': _googleApiKey,
+        },
+        body: json.encode({'input': query}),
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final suggestions = data['suggestions'] as List? ?? [];
 
-        if (data['status'] == 'OK') {
-          final predictions = data['predictions'] as List;
+        // Process a maximum of 5 predictions
+        final results = <LocationModel>[];
 
-          // Process a maximum of 5 predictions
-          final results = <LocationModel>[];
+        for (var i = 0; i < suggestions.length && results.length < 5; i++) {
+          final prediction =
+              suggestions[i]['placePrediction'] as Map<String, dynamic>?;
+          if (prediction == null) continue;
 
-          for (var i = 0; i < predictions.length && i < 5; i++) {
-            final prediction = predictions[i];
-            final placeId = prediction['place_id'] as String;
-            final description = prediction['description'] as String;
+          final placeId = prediction['placeId'] as String?;
+          if (placeId == null || placeId.isEmpty) continue;
 
-            // Get details for this place to get coordinates
-            final locationDetails = await _getPlaceDetails(placeId);
+          final description =
+              (prediction['text']?['text'] as String?) ?? '';
+          final mainText =
+              (prediction['structuredFormat']?['mainText']?['text']
+                  as String?) ??
+              description;
 
-            if (locationDetails != null) {
-              results.add(
-                LocationModel(
-                  coordinates: locationDetails,
-                  address: description,
-                  name:
-                      prediction['structured_formatting']['main_text']
-                          as String,
-                  placeId: placeId,
-                ),
-              );
-            }
+          // Get details for this place to get coordinates
+          final locationDetails = await _getPlaceDetails(placeId);
+
+          if (locationDetails != null) {
+            results.add(
+              LocationModel(
+                coordinates: locationDetails,
+                address: description,
+                name: mainText,
+                placeId: placeId,
+              ),
+            );
           }
-
-          return results;
         }
+
+        return results;
       }
 
       return [];
@@ -158,24 +167,30 @@ class LocationService {
     }
   }
 
-  // Get place details (coordinates) from a place ID
+  // Get place details (coordinates) from a place ID using Places API (New)
   Future<LatLng?> _getPlaceDetails(String placeId) async {
     try {
       final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/details/json'
-        '?place_id=$placeId'
-        '&fields=geometry'
-        '&key=$_googleApiKey',
+        'https://places.googleapis.com/v1/places/$placeId',
       );
 
-      final response = await http.get(url);
+      final response = await http.get(
+        url,
+        headers: {
+          'X-Goog-Api-Key': _googleApiKey,
+          'X-Goog-FieldMask': 'location',
+        },
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final location = data['location'] as Map<String, dynamic>?;
 
-        if (data['status'] == 'OK') {
-          final lat = data['result']['geometry']['location']['lat'] as double;
-          final lng = data['result']['geometry']['location']['lng'] as double;
+        if (location != null &&
+            location['latitude'] != null &&
+            location['longitude'] != null) {
+          final lat = (location['latitude'] as num).toDouble();
+          final lng = (location['longitude'] as num).toDouble();
 
           return LatLng(lat, lng);
         }

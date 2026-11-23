@@ -877,7 +877,7 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
-  // Helper function to get directions polyline between two points
+  // Helper function to get directions polyline between two points (Routes API v2)
   Future<List<LatLng>> _getDirectionsPolyline(
     LatLng origin,
     LatLng destination,
@@ -885,36 +885,62 @@ class MapProvider extends ChangeNotifier {
     final String apiKey = AppConfig.googleMapsApiKey;
 
     try {
-      // ── DEBUG: raw HTTP call to see the EXACT Google API response ──────────
-      final debugUrl = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json'
-        '?origin=${origin.latitude},${origin.longitude}'
-        '&destination=${destination.latitude},${destination.longitude}'
-        '&mode=driving'
-        '&key=$apiKey',
+      final url = Uri.parse(
+        'https://routes.googleapis.com/directions/v2:computeRoutes',
       );
 
-      final rawResponse = await http.get(debugUrl);
-      print('🗺️ [DIRECTIONS DEBUG] HTTP status: ${rawResponse.statusCode}');
-      print('🗺️ [DIRECTIONS DEBUG] Response body: ${rawResponse.body}');
-      // ───────────────────────────────────────────────────────────────────────
+      final rawResponse = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.polyline.encodedPolyline',
+        },
+        body: json.encode({
+          'origin': {
+            'location': {
+              'latLng': {
+                'latitude': origin.latitude,
+                'longitude': origin.longitude,
+              },
+            },
+          },
+          'destination': {
+            'location': {
+              'latLng': {
+                'latitude': destination.latitude,
+                'longitude': destination.longitude,
+              },
+            },
+          },
+          'travelMode': 'DRIVE',
+        }),
+      );
+
+      print('🗺️ [ROUTES API] HTTP status: ${rawResponse.statusCode}');
 
       if (rawResponse.statusCode == 200) {
         final decoded = json.decode(rawResponse.body);
-        final status = decoded['status'] as String? ?? 'UNKNOWN';
+        final routes = decoded['routes'] as List?;
 
-        if (status == 'OK') {
-          final points = decoded['routes'][0]['overview_polyline']['points'] as String;
-          final List<PointLatLng> decoded2 = PolylinePoints.decodePolyline(points);
-          print('🗺️ Route OK — ${decoded2.length} polyline points');
-          return decoded2.map((p) => LatLng(p.latitude, p.longitude)).toList();
-        } else {
-          final errorMsg = decoded['error_message'] ?? '(no error message)';
-          print('🗺️ Directions API status: "$status" — $errorMsg');
-          return [origin, destination]; // straight-line fallback
+        if (routes != null && routes.isNotEmpty) {
+          final points =
+              routes[0]['polyline']?['encodedPolyline'] as String?;
+          if (points != null && points.isNotEmpty) {
+            final List<PointLatLng> decoded2 =
+                PolylinePoints.decodePolyline(points);
+            print('🗺️ Route OK — ${decoded2.length} polyline points');
+            return decoded2
+                .map((p) => LatLng(p.latitude, p.longitude))
+                .toList();
+          }
         }
+        print('🗺️ Routes API returned no routes: ${rawResponse.body}');
+        return [origin, destination]; // straight-line fallback
       } else {
-        print('🗺️ HTTP error ${rawResponse.statusCode}');
+        print(
+          '🗺️ Routes API HTTP error ${rawResponse.statusCode}: ${rawResponse.body}',
+        );
         return [origin, destination];
       }
     } catch (e) {
