@@ -76,12 +76,15 @@ flutter:
     - assets/car_standard.webp
     - assets/car_xl.webp
     - assets/car_vip.webp
+    - assets/logo_full.png
+    - assets/icon.png
 flutter_icons:
     android: true
     ios: true
-    image_path: "assets/icon.png"  # Path to your icon file
+    remove_alpha_ios: true
+    image_path: "assets/icon.png"  # TarikNa emblem on white
     adaptive_icon_background: "#FFFFFF" # Background color for adaptive icons
-  # adaptive_icon_foreground: "assets/icon/icon_foreground.png" # Optional foreground  
+    adaptive_icon_foreground: "assets/icon_foreground.png" # Emblem inside Android safe zone
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

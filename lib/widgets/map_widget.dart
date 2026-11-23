@@ -1,3 +1,4 @@
+import '../theme/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -442,7 +443,7 @@ class _MapWidgetState extends State<MapWidget> {
             //             height: 5,
             //             width: 5,
             //             child: CircularProgressIndicator(
-            //               color: Colors.amber,
+            //               color: AppColors.primary,
             //               strokeWidth: 2,
             //             ),
             //           )
@@ -471,14 +472,14 @@ class _MapWidgetState extends State<MapWidget> {
                           height: 12,
                           width: 12,
                           child: CircularProgressIndicator(
-                            color: Colors.amber,
+                            color: AppColors.primary,
                             strokeWidth: 2,
                           ),
                         ),
                         SizedBox(width: 6),
                         Text(
                           'Locating you...',
-                          style: TextStyle(fontSize: 11, color: Colors.black87),
+                          style: TextStyle(fontSize: 11, color: AppColors.textPrimary),
                         ),
                       ],
                     ),

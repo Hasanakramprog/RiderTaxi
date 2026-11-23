@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:taxi_auth_app/providers/auth_provider.dart';
 import 'package:taxi_auth_app/screens/home_screen_pro.dart';
@@ -136,16 +137,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
       // Show loading while checking for active trips
       if (_checkingActiveTrip) {
         return Scaffold(
-          backgroundColor: Colors.amber,
+          backgroundColor: AppColors.background,
           body: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(color: Colors.white),
+                CircularProgressIndicator(color: AppColors.primary),
                 SizedBox(height: 16),
                 Text(
                   'Checking for active trips...',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                 ),
               ],
             ),

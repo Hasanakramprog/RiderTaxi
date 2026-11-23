@@ -11,6 +11,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:taxi_auth_app/services/notification_service.dart';
 import 'firebase_options.dart';
 import 'package:taxi_auth_app/utils/app_config.dart';
+import 'package:taxi_auth_app/theme/app_theme.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> createTestTrips() async {
@@ -178,35 +179,13 @@ class MyApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'Ismail Taxi',
+        title: 'TarikNa',
         builder: (context, child) {
           return NetworkConnectivityBanner(
             child: child ?? const SizedBox.shrink(),
           );
         },
-        theme: ThemeData(
-          primarySwatch: Colors.amber,
-          primaryColor: Colors.amber,
-          colorScheme: ColorScheme.fromSwatch(
-            primarySwatch: Colors.amber,
-          ).copyWith(secondary: Colors.amberAccent),
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          appBarTheme: const AppBarTheme(elevation: 2, centerTitle: false),
-          buttonTheme: const ButtonThemeData(
-            buttonColor: Colors.amber,
-            textTheme: ButtonTextTheme.primary,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color.fromARGB(255, 95, 92, 84),
-              foregroundColor: Colors.black87,
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-        ),
+        theme: AppTheme.light,
         home: const AuthWrapper(),
         debugShowCheckedModeBanner: false,
       ),

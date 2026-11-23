@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/car_type.dart';
 import '../providers/firestore_provider.dart';
 import 'trip_tracking_screen.dart';
+import '../theme/app_colors.dart';
 
 class TripHistoryScreen extends StatefulWidget {
   const TripHistoryScreen({Key? key}) : super(key: key);
@@ -33,27 +34,27 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFFFFC107)),
+          icon: const Icon(Icons.arrow_back, color: AppColors.primary),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Trip History',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
         ),
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFFFFC107),
-          unselectedLabelColor: Colors.grey.shade400,
-          indicatorColor: const Color(0xFFFFC107),
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textMuted,
+          indicatorColor: AppColors.primary,
           indicatorWeight: 3,
           labelStyle: const TextStyle(
             fontWeight: FontWeight.bold,
@@ -91,26 +92,26 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFFC107),
+                        color: AppColors.primary,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.local_taxi,
                         size: 40,
-                        color: Colors.black,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 16),
                     const CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        Color(0xFFFFC107),
+                        AppColors.primary,
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'Loading trips...',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         fontSize: 14,
                       ),
                     ),
@@ -127,14 +128,14 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                     Icon(
                       Icons.error_outline,
                       size: 64,
-                      color: Colors.red.shade300,
+                      color: AppColors.danger,
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'Error loading trips',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey.shade700,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -143,7 +144,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                       '${snapshot.error}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: AppColors.textSecondary,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -221,10 +222,10 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: AppColors.surfaceAlt,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 64, color: Colors.grey.shade400),
+            child: Icon(icon, size: 64, color: AppColors.textMuted),
           ),
           const SizedBox(height: 24),
           Text(
@@ -232,13 +233,13 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Colors.black,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             description,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
@@ -254,11 +255,12 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: AppColors.shadow,
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -290,12 +292,12 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFC107).withOpacity(0.1),
+                            color: AppColors.primarySoft,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
                             Icons.local_taxi,
-                            color: Color(0xFFFFC107),
+                            color: AppColors.primary,
                             size: 20,
                           ),
                         ),
@@ -308,7 +310,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.black,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -318,7 +320,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                                   : 'Unknown date',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey.shade600,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ],
@@ -368,7 +370,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFC107),
+                        color: AppColors.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -376,7 +378,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -398,7 +400,7 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
         Expanded(
           child: Text(
             address,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+            style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -411,19 +413,19 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.grey.shade700),
+          Icon(icon, size: 16, color: AppColors.textPrimary),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.grey.shade700,
+              color: AppColors.textPrimary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -439,42 +441,42 @@ class _TripHistoryScreenState extends State<TripHistoryScreen>
 
     switch (status) {
       case 'searching':
-        bgColor = Colors.blue.shade50;
-        textColor = Colors.blue.shade700;
+        bgColor = AppColors.primarySoft;
+        textColor = AppColors.primary;
         statusText = 'Searching';
         break;
       case 'accepted':
       case 'driver_accepted':
-        bgColor = Colors.orange.shade50;
-        textColor = Colors.orange.shade700;
+        bgColor = AppColors.warning.withOpacity(0.12);
+        textColor = AppColors.warning;
         statusText = 'Accepted';
         break;
       case 'arriving':
       case 'arrived':
       case 'driver_arrived':
-        bgColor = Colors.amber.shade50;
-        textColor = Colors.amber.shade900;
+        bgColor = AppColors.warning.withOpacity(0.12);
+        textColor = AppColors.warning;
         statusText = 'Arriving';
         break;
       case 'inprogress':
       case 'in_progress':
-        bgColor = Colors.purple.shade50;
-        textColor = Colors.purple.shade700;
+        bgColor = AppColors.primarySoft;
+        textColor = AppColors.primary;
         statusText = 'In Progress';
         break;
       case 'completed':
-        bgColor = Colors.green.shade50;
-        textColor = Colors.green.shade700;
+        bgColor = AppColors.success.withOpacity(0.12);
+        textColor = AppColors.success;
         statusText = 'Completed';
         break;
       case 'cancelled':
-        bgColor = Colors.red.shade50;
-        textColor = Colors.red.shade700;
+        bgColor = AppColors.danger.withOpacity(0.12);
+        textColor = AppColors.danger;
         statusText = 'Cancelled';
         break;
       default:
-        bgColor = Colors.grey.shade50;
-        textColor = Colors.grey.shade700;
+        bgColor = AppColors.surfaceAlt;
+        textColor = AppColors.textPrimary;
         statusText = status.capitalize();
     }
 

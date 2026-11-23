@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/network_connectivity_widgets.dart';
+import '../theme/app_colors.dart';
 import 'trip_request_screen_pro.dart';
 import 'trip_history_screen_pro.dart';
 import 'dart:math' as math;
@@ -16,61 +17,46 @@ class HomeScreenPro extends StatefulWidget {
 class _HomeScreenProState extends State<HomeScreenPro>
     with TickerProviderStateMixin {
   late AnimationController _mainController;
-  late AnimationController _shimmerController;
-  late AnimationController _floatingController;
+  late AnimationController _pulseController;
   late AnimationController _rotationController;
 
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
 
-    // Main entrance animation
+    // Entrance animation
     _mainController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 900),
       vsync: this,
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _mainController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
       ),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+      begin: const Offset(0, 0.08),
       end: Offset.zero,
     ).animate(
       CurvedAnimation(
         parent: _mainController,
-        curve: const Interval(0.2, 0.8, curve: Curves.easeOutCubic),
+        curve: const Interval(0.1, 1.0, curve: Curves.easeOutCubic),
       ),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOutBack),
-      ),
-    );
-
-    // Shimmer effect for highlights
-    _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 2500),
-      vsync: this,
-    )..repeat();
-
-    // Floating animation for cards
-    _floatingController = AnimationController(
+    // Gentle breathing on the main CTA
+    _pulseController = AnimationController(
       duration: const Duration(milliseconds: 3000),
       vsync: this,
     )..repeat(reverse: true);
 
-    // Rotation animation for icons
+    // Slow diagonal stripe movement on the CTA background
     _rotationController = AnimationController(
       duration: const Duration(milliseconds: 20000),
       vsync: this,
@@ -82,8 +68,7 @@ class _HomeScreenProState extends State<HomeScreenPro>
   @override
   void dispose() {
     _mainController.dispose();
-    _shimmerController.dispose();
-    _floatingController.dispose();
+    _pulseController.dispose();
     _rotationController.dispose();
     super.dispose();
   }
@@ -92,53 +77,26 @@ class _HomeScreenProState extends State<HomeScreenPro>
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
 
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A1A1A), // Deep black
-              Color(0xFF2D2D2D), // Dark gray
-              Color(0xFF1A1A1A), // Deep black
-            ],
-          ),
-        ),
-        child: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  slivers: [
-                    // Premium App Bar
-                    SliverToBoxAdapter(
-                      child: _buildPremiumHeader(authProvider),
-                    ),
-
-                    // Main Hero Section
-                    SliverToBoxAdapter(child: _buildHeroSection()),
-
-                    // Quick Stats Cards
-                    SliverToBoxAdapter(child: _buildQuickStats()),
-
-                    // Main Action Button
-                    SliverToBoxAdapter(child: _buildMainActionButton(context)),
-
-                    // Service Cards
-                    SliverToBoxAdapter(child: _buildServiceCards(context)),
-
-                    // Premium Footer
-                    SliverToBoxAdapter(child: _buildPremiumFooter()),
-
-                    // Bottom spacing
-                    const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                  ],
-                ),
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(child: _buildHeader(authProvider)),
+                  SliverToBoxAdapter(child: _buildHeroSection()),
+                  SliverToBoxAdapter(child: _buildQuickStats()),
+                  SliverToBoxAdapter(child: _buildMainActionButton(context)),
+                  SliverToBoxAdapter(child: _buildQuickActions(context)),
+                  SliverToBoxAdapter(child: _buildFooter()),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                ],
               ),
             ),
           ),
@@ -147,113 +105,80 @@ class _HomeScreenProState extends State<HomeScreenPro>
     );
   }
 
-  Widget _buildPremiumHeader(AuthProvider authProvider) {
+  // ── Header: logo tile + brand name + profile button ──────────────────────
+  Widget _buildHeader(AuthProvider authProvider) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Logo and Brand
           Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 56,
+                height: 56,
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
+                  boxShadow: const [
                     BoxShadow(
-                      color: const Color(0xFFFFC107).withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      color: AppColors.shadow,
+                      blurRadius: 16,
+                      offset: Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.local_taxi,
-                  color: Colors.black,
-                  size: 28,
-                ),
+                child: Image.asset('assets/icon.png', fit: BoxFit.contain),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TAXI PRO',
+                children: const [
+                  Text(
+                    'TarikNa',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
+                      color: AppColors.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
                     ),
                   ),
-                  AnimatedBuilder(
-                    animation: _shimmerController,
-                    builder: (context, child) {
-                      return ShaderMask(
-                        shaderCallback: (bounds) {
-                          return LinearGradient(
-                            colors: const [
-                              Color(0xFFFFC107),
-                              Color(0xFFFFD54F),
-                              Color(0xFFFFC107),
-                            ],
-                            stops: [
-                              _shimmerController.value - 0.3,
-                              _shimmerController.value,
-                              _shimmerController.value + 0.3,
-                            ],
-                            tileMode: TileMode.mirror,
-                          ).createShader(bounds);
-                        },
-                        child: const Text(
-                          'Premium Service',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      );
-                    },
+                  SizedBox(height: 2),
+                  Text(
+                    'طريقنا',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
             ],
           ),
-
-          // Profile Button
           GestureDetector(
-            onTap: () => _showPremiumProfile(context, authProvider),
+            onTap: () => _showProfile(context, authProvider),
             child: Container(
-              width: 48,
-              height: 48,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF2D2D2D),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFFFC107).withOpacity(0.3),
-                  width: 1.5,
-                ),
-                boxShadow: [
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.border),
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    color: AppColors.shadow,
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
                   ),
                 ],
               ),
               child: const Icon(
-                Icons.person_outline,
-                color: Color(0xFFFFC107),
-                size: 24,
+                Icons.person_outline_rounded,
+                color: AppColors.primary,
+                size: 26,
               ),
             ),
           ),
@@ -262,80 +187,52 @@ class _HomeScreenProState extends State<HomeScreenPro>
     );
   }
 
+  // ── Greeting + headline ──────────────────────────────────────────────────
   Widget _buildHeroSection() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Greeting with time-based icon
           Row(
             children: [
-              Icon(
-                _getTimeBasedIcon(),
-                color: const Color(0xFFFFC107),
-                size: 24,
-              ),
-              const SizedBox(width: 8),
+              Icon(_getTimeBasedIcon(), color: AppColors.primary, size: 22),
+              const SizedBox(width: 10),
               Text(
                 _getGreeting(),
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 14,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-
-          // Main headline
+          const SizedBox(height: 6),
           const Text(
             'Where to?',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              height: 1.2,
+              color: AppColors.textPrimary,
+              fontSize: 40,
+              fontWeight: FontWeight.w800,
+              height: 1.15,
             ),
           ),
-          const SizedBox(height: 4),
-
-          // Subheadline with shimmer
-          AnimatedBuilder(
-            animation: _shimmerController,
-            builder: (context, child) {
-              return ShaderMask(
-                shaderCallback: (bounds) {
-                  return LinearGradient(
-                    colors: [
-                      Colors.white.withOpacity(0.5),
-                      const Color(0xFFFFC107),
-                      Colors.white.withOpacity(0.5),
-                    ],
-                    stops: [
-                      (_shimmerController.value - 0.2).clamp(0.0, 1.0),
-                      _shimmerController.value,
-                      (_shimmerController.value + 0.2).clamp(0.0, 1.0),
-                    ],
-                  ).createShader(bounds);
-                },
-                child: const Text(
-                  'Professional rides at your service',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              );
-            },
+          const SizedBox(height: 6),
+          const Text(
+            'Professional rides at your service',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ── Stat cards ───────────────────────────────────────────────────────────
   Widget _buildQuickStats() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -345,7 +242,7 @@ class _HomeScreenProState extends State<HomeScreenPro>
             child: _buildStatCard('24/7', 'Available', Icons.access_time),
           ),
           const SizedBox(width: 12),
-          Expanded(child: _buildStatCard('5★', 'Rated', Icons.star_rounded)),
+          Expanded(child: _buildStatCard('5.0', 'Rated', Icons.star_rounded)),
           const SizedBox(width: 12),
           Expanded(child: _buildStatCard('Fast', 'Service', Icons.speed)),
         ],
@@ -354,311 +251,223 @@ class _HomeScreenProState extends State<HomeScreenPro>
   }
 
   Widget _buildStatCard(String value, String label, IconData icon) {
-    return AnimatedBuilder(
-      animation: _floatingController,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(
-            0,
-            math.sin(_floatingController.value * 2 * math.pi) * 3,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadow,
+            blurRadius: 14,
+            offset: Offset(0, 5),
           ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [const Color(0xFF2D2D2D), const Color(0xFF1A1A1A)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFFFFC107).withOpacity(0.2),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Icon(icon, color: const Color(0xFFFFC107), size: 20),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.primary, size: 22),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMainActionButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-      child: AnimatedBuilder(
-        animation: _floatingController,
-        builder: (context, child) {
-          return Transform.scale(
-            scale:
-                1.0 +
-                (math.sin(_floatingController.value * 2 * math.pi) * 0.02),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    pageBuilder:
-                        (context, animation, secondaryAnimation) =>
-                            const TripRequestScreenPro(),
-                    transitionsBuilder: (
-                      context,
-                      animation,
-                      secondaryAnimation,
-                      child,
-                    ) {
-                      var curve = Curves.easeInOutCubic;
-                      var tween = Tween(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: curve));
-                      return SlideTransition(
-                        position: animation.drive(tween),
-                        child: child,
-                      );
-                    },
-                    transitionDuration: const Duration(milliseconds: 400),
-                  ),
-                );
-              },
-              child: Container(
-                height: 120,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFFFC107),
-                      Color(0xFFFFD54F),
-                      Color(0xFFFFC107),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFC107).withOpacity(0.5),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    // Animated background pattern
-                    Positioned.fill(
-                      child: AnimatedBuilder(
-                        animation: _rotationController,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            painter: TaxiPatternPainter(
-                              progress: _rotationController.value,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    // Content
-                    Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.add_location_alt,
-                              color: Colors.black,
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'BOOK A RIDE',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Tap to get started',
-                                style: TextStyle(
-                                  color: Colors.black.withOpacity(0.7),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildServiceCards(BuildContext context) {
+  // ── BOOK A RIDE card ─────────────────────────────────────────────────────
+  Widget _buildMainActionButton(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, child) {
+          return Transform.scale(
+            scale:
+                1.0 + (math.sin(_pulseController.value * 2 * math.pi) * 0.01),
+            child: child,
+          );
+        },
+        child: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder:
+                    (context, animation, secondaryAnimation) =>
+                        const TripRequestScreenPro(),
+                transitionsBuilder: (
+                  context,
+                  animation,
+                  secondaryAnimation,
+                  child,
+                ) {
+                  final tween = Tween(
+                    begin: const Offset(1.0, 0.0),
+                    end: Offset.zero,
+                  ).chain(CurveTween(curve: Curves.easeInOutCubic));
+                  return SlideTransition(
+                    position: animation.drive(tween),
+                    child: child,
+                  );
+                },
+                transitionDuration: const Duration(milliseconds: 400),
+              ),
+            );
+          },
+          child: Container(
+            height: 128,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.35),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: AnimatedBuilder(
+                      animation: _rotationController,
+                      builder: (context, child) {
+                        return CustomPaint(
+                          painter: StripePatternPainter(
+                            progress: _rotationController.value,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.add_location_alt_outlined,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'BOOK A RIDE',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap to get started',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.85),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Quick Actions: Hotels / Restaurants / Shopping / Tourism ─────────────
+  Widget _buildQuickActions(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Quick Actions',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: _buildServiceCard(
-                  icon: Icons.history,
-                  title: 'History',
-                  subtitle: 'View trips',
-                  colors: const [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      PageRouteBuilder(
-                        pageBuilder:
-                            (context, animation, secondaryAnimation) =>
-                                const TripHistoryScreen(),
-                        transitionsBuilder: (
-                          context,
-                          animation,
-                          secondaryAnimation,
-                          child,
-                        ) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          );
-                        },
-                        transitionDuration: const Duration(milliseconds: 300),
-                      ),
-                    );
-                  },
+                child: _buildActionCard(
+                  icon: Icons.bed_outlined,
+                  title: 'Hotels',
+                  subtitle: 'Find stays',
+                  onTap: () => _showComingSoon(context, 'Hotels'),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: _buildServiceCard(
-                  icon: Icons.payment,
-                  title: 'Wallet',
-                  subtitle: 'Payment',
-                  colors: const [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Wallet feature coming soon'),
-                        backgroundColor: const Color(0xFFFFC107),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  },
+                child: _buildActionCard(
+                  icon: Icons.restaurant_rounded,
+                  title: 'Restaurants',
+                  subtitle: 'Dining spots',
+                  onTap: () => _showComingSoon(context, 'Restaurants'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: _buildServiceCard(
-                  icon: Icons.support_agent,
-                  title: 'Support',
-                  subtitle: '24/7 Help',
-                  colors: const [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Support: +1-800-TAXI-PRO'),
-                        backgroundColor: const Color(0xFFFFC107),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  },
+                child: _buildActionCard(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'Shopping',
+                  subtitle: 'Malls & stores',
+                  onTap: () => _showComingSoon(context, 'Shopping'),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: _buildServiceCard(
-                  icon: Icons.card_giftcard,
-                  title: 'Offers',
-                  subtitle: 'Rewards',
-                  colors: const [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('No active offers at the moment'),
-                        backgroundColor: const Color(0xFFFFC107),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  },
+                child: _buildActionCard(
+                  icon: Icons.public_rounded,
+                  title: 'Tourism',
+                  subtitle: 'Places to see',
+                  onTap: () => _showComingSoon(context, 'Tourism'),
                 ),
               ),
             ],
@@ -668,130 +477,100 @@ class _HomeScreenProState extends State<HomeScreenPro>
     );
   }
 
-  Widget _buildServiceCard({
+  Widget _buildActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
-    required List<Color> colors,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedBuilder(
-        animation: _floatingController,
-        builder: (context, child) {
-          return Transform.translate(
-            offset: Offset(
-              0,
-              math.sin(_floatingController.value * 2 * math.pi + 0.5) * 2,
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: AppColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadow,
+              blurRadius: 14,
+              offset: Offset(0, 5),
             ),
-            child: Container(
-              padding: const EdgeInsets.all(16),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: colors,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: const Color(0xFFFFC107).withOpacity(0.2),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFC107).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(icon, color: const Color(0xFFFFC107), size: 24),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+              child: Icon(icon, color: AppColors.primary, size: 26),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          );
-        },
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildPremiumFooter() {
+  void _showComingSoon(BuildContext context, String name) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$name is coming soon'),
+        backgroundColor: AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  // ── Footer ───────────────────────────────────────────────────────────────
+  Widget _buildFooter() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       child: Column(
         children: [
-          // Copyright and version
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D2D2D).withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFFFFC107).withOpacity(0.1),
-                width: 1,
-              ),
+          Text(
+            '© ${DateTime.now().year} Mkpro Technologies',
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.copyright,
-                      color: Colors.white.withOpacity(0.4),
-                      size: 12,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${DateTime.now().year} Mkpro Technologies',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'All Rights Reserved • v1.0.0',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.3),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'All Rights Reserved • v1.0.0',
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 10,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -799,22 +578,19 @@ class _HomeScreenProState extends State<HomeScreenPro>
     );
   }
 
-  void _showPremiumProfile(BuildContext context, AuthProvider authProvider) {
+  // ── Profile sheet (also hosts Trip History, which used to be a card) ─────
+  void _showProfile(BuildContext context, AuthProvider authProvider) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder:
-          (context) => Container(
+          (sheetContext) => Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF2D2D2D), Color(0xFF1A1A1A)],
-              ),
+              color: AppColors.surface,
               borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
               ),
             ),
             child: SafeArea(
@@ -823,46 +599,33 @@ class _HomeScreenProState extends State<HomeScreenPro>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Handle bar
                     Container(
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFC107).withOpacity(0.5),
+                        color: AppColors.border,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(height: 24),
-
-                    // Profile info
                     Container(
                       width: 80,
                       height: 80,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFFC107), Color(0xFFFFD54F)],
-                        ),
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFFFC107).withOpacity(0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
                       ),
                       child: const Icon(
                         Icons.person,
-                        color: Colors.black,
+                        color: Colors.white,
                         size: 40,
                       ),
                     ),
                     const SizedBox(height: 16),
-
                     Text(
                       authProvider.user?.email ?? 'Guest User',
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -874,41 +637,58 @@ class _HomeScreenProState extends State<HomeScreenPro>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFC107).withOpacity(0.2),
+                        color: AppColors.primarySoft,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0xFFFFC107).withOpacity(0.5),
-                        ),
                       ),
                       child: const Text(
                         'PREMIUM MEMBER',
                         style: TextStyle(
-                          color: Color(0xFFFFC107),
+                          color: AppColors.primary,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 32),
-
-                    // Sign out button
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const TripHistoryScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.history_rounded),
+                        label: const Text(
+                          'TRIP HISTORY',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
-                          Navigator.pop(context);
+                          Navigator.pop(sheetContext);
                           await authProvider.signOut();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFC107),
-                          foregroundColor: Colors.black,
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 8,
-                          shadowColor: const Color(0xFFFFC107).withOpacity(0.5),
                         ),
                         child: const Text(
                           'SIGN OUT',
@@ -937,27 +717,26 @@ class _HomeScreenProState extends State<HomeScreenPro>
 
   IconData _getTimeBasedIcon() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return Icons.wb_sunny;
-    if (hour < 17) return Icons.wb_cloudy;
+    if (hour < 12) return Icons.wb_sunny_outlined;
+    if (hour < 17) return Icons.wb_cloudy_outlined;
     return Icons.nightlight_round;
   }
 }
 
-// Custom painter for taxi pattern background
-class TaxiPatternPainter extends CustomPainter {
+/// Soft diagonal stripes drawn on the BOOK A RIDE card.
+class StripePatternPainter extends CustomPainter {
   final double progress;
 
-  TaxiPatternPainter({required this.progress});
+  StripePatternPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint =
         Paint()
-          ..color = Colors.black.withOpacity(0.1)
+          ..color = Colors.white.withOpacity(0.08)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2;
 
-    // Draw diagonal lines
     for (double i = -size.width; i < size.width * 2; i += 40) {
       final offset = (progress * 80) % 80;
       canvas.drawLine(
@@ -969,5 +748,6 @@ class TaxiPatternPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(TaxiPatternPainter oldDelegate) => true;
+  bool shouldRepaint(StripePatternPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

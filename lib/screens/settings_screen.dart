@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -10,15 +11,24 @@ class SettingsScreen extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Settings'),
-        backgroundColor: Colors.amber,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           // User Info Section
           Card(
+            color: AppColors.surface,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.border),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -42,10 +52,16 @@ class SettingsScreen extends StatelessWidget {
           
           // Settings Options
           Card(
+            color: AppColors.surface,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.border),
+            ),
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.notifications),
+                  leading: const Icon(Icons.notifications, color: AppColors.primary),
                   title: const Text('Notifications'),
                   trailing: Switch(
                     value: true,
@@ -56,7 +72,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.privacy_tip),
+                  leading: const Icon(Icons.privacy_tip, color: AppColors.primary),
                   title: const Text('Privacy Policy'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
@@ -65,7 +81,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.info),
+                  leading: const Icon(Icons.info, color: AppColors.primary),
                   title: const Text('About'),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
@@ -74,8 +90,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
-                  title: const Text('Logout', style: TextStyle(color: Colors.red)),
+                  leading: const Icon(Icons.logout, color: AppColors.danger),
+                  title: const Text('Logout', style: TextStyle(color: AppColors.danger)),
                   onTap: () {
                     _showLogoutDialog(context, authProvider);
                   },
@@ -107,7 +123,7 @@ class SettingsScreen extends StatelessWidget {
                 Navigator.of(context).pop();
                 await authProvider.signOut();
               },
-              child: const Text('Logout', style: TextStyle(color: Colors.red)),
+              child: const Text('Logout', style: TextStyle(color: AppColors.danger)),
             ),
           ],
         );
@@ -120,16 +136,16 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('About Taxi App'),
+          title: const Text('About TarikNa'),
           content: const Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Taxi App v1.0.0'),
+              Text('TarikNa v1.0.0'),
               SizedBox(height: 10),
               Text('A modern taxi booking application built with Flutter and Firebase.'),
               SizedBox(height: 10),
-              Text('© 2024 Taxi App. All rights reserved.'),
+              Text('© 2024 TarikNa. All rights reserved.'),
             ],
           ),
           actions: [

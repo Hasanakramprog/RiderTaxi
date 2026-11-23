@@ -1,109 +1,82 @@
-# RiderTaxi: final cost report (Firebase + Google Maps)
+# RiderTaxi: Final Cost Report (Firebase + Google Maps)
 
 > [!NOTE]
-> **Prepared:** 2026-10-21. **Scope:** the rider app, the Cloud Functions in `functions/`, and the driver app's location writes. **Prices:** Google Maps prices are from mapsplatform.google.com/pricing (checked today). Firestore prices are US list prices from memory: reads $0.06 per 100k and writes $0.18 per 100k. A single-region database costs about half. Treat every number as an estimate that could be off by ±30%.
+> **Updated:** 2026-10-31 (Post-commit `9c98dc1`: *migrate driver search to Cloud Tasks chain and remove client polling*, and updated for the **Drag-to-Pin UX** in `TripRequestScreenPro`).  
+> **Scope:** Rider Flutter app (`HomeScreenPro` / `TripRequestScreenPro`), Cloud Functions + Cloud Tasks in `functions/`, and Driver app location/decline writes.  
+> **Related Plans:** [`CLOUD_TASKS_DISPATCH.md`](./CLOUD_TASKS_DISPATCH.md) (Implemented) | [`MAPS_COST_OPTIMIZATION_PLAN.md`](./MAPS_COST_OPTIMIZATION_PLAN.md) (Planned)
 
 ---
 
-## 1. Summary
+## 1. Executive Summary
 
-| | Now | After all fixes |
-|---|---|---|
-| Cost per trip at 10k trips a month | **~$0.25** | **~$0.001–0.007** |
-| Biggest cost | Place Details (legacy, $17 per 1,000), up to 5 per search request | Routes and Place Details Essentials |
-| Recommended plan | — | **Firebase Blaze + Google Maps pay-as-you-go** |
+Because your active Rider app ([`TripRequestScreenPro`](file:///Users/macbook/Desktop/rider/lib/screens/trip_request_screen_pro.dart)) uses **Drag-to-Pin** on the map (and does **not** use the legacy typing autocomplete in `location_service.dart`), your Google Maps costs are **much lower** than a text-autocomplete app and come only from **Reverse Geocoding** (on pin release) and **Directions API** (for the route polyline).
 
-**About 90% of the bill comes from one function**, `searchPlaces()` in [location_service.dart](file:///Users/macbook/Desktop/rider/lib/services/location_service.dart#L108-L175). Fix it before launch.
+| Metric | Current Drag-Pin State (Post-`9c98dc1`) | After [`MAPS_COST_OPTIMIZATION_PLAN.md`](./MAPS_COST_OPTIMIZATION_PLAN.md) |
+| :--- | :--- | :--- |
+| **Dispatch Architecture** | ✅ **100% Server-Side Cloud Tasks Chain** | ✅ **100% Server-Side Cloud Tasks Chain** |
+| **Dispatch Cloud Tasks Cost** | **$0.00 / month** up to ~250k trips (1M free ops/mo) | **$0.00 / month** |
+| **Pin-Drag Geocoding Cost (50k trips)** | **~$950 / month** (`geocode/json` HTTP call on pin release) | **$0.00 / month** (Free on-device `geocoding` package) |
+| **Directions API Cost (50k trips)** | **~$325 / month** (uncached + multi-segment calls) | **~$200 / month** (1 cached call/trip, minus 10k free/mo) |
+| **Total Bill for 50,000 Trips** | **~$1,327 / month** (~$1,027 after $300 credit) | **~$252 / month** (**$0.00 out of pocket** with $300 credit!) |
+| **Recommended Plans** | **Firebase Blaze + Google Maps Pay-As-You-Go** | **Firebase Blaze + Google Maps Pay-As-You-Go** |
 
 ---
 
-## 2. Monthly cost
+## 2. Cost Impact of Commit `9c98dc1` (Cloud Tasks Dispatch — Implemented ✅)
+
+Migrating from client-driven `Timer.periodic` polling (and avoiding a 120s server `sleep()` loop) in [`findNearbyDrivers.js`](file:///Users/macbook/Desktop/rider/functions/findNearbyDrivers.js) and [`trip_tracking_screen.dart`](file:///Users/macbook/Desktop/rider/lib/screens/trip_tracking_screen.dart) delivered:
+
+| Resource | Before (`searchRefreshedAt` Polling) | Alternative (`120s sleep` Loop) | **Now (`9c98dc1` Cloud Tasks Chain)** |
+| :--- | :--- | :--- | :--- |
+| **Client Polling Writes (`trips/{id}`)** | Up to **12 writes / trip** (every 10s) | 0 writes | ✅ **0 client polling writes** |
+| **Unnecessary Trigger Fan-Out** | Up to **36 function calls / trip** | 0 extra calls | ✅ **Eliminated `refreshNearbyDriversSearch`** |
+| **Function Active Compute Time** | ~1–6s across refreshes | ❌ **Up to 120s billed idle time / trip** | ✅ **~0.8s per round × 2–8 rounds** ($0 idle wait) |
+| **Cloud Tasks Operations** | 0 | 0 | **2–16 ops / trip** (**FREE** up to 1,000,000 ops/mo) |
+
+---
+
+## 3. Monthly Cost Projections (Drag-to-Pin UX)
 
 ### Assumptions
-- Each trip: 3 autocomplete requests, 2 Directions calls, 3 reverse geocodes and about 300–550 Firestore reads.
-- Drivers are online 8 hours a day and send their location every 10 seconds.
-- Number of drivers: 20, 100, 400 and 1,000 for the four sizes below.
+* **Each trip:** ~4 pin drag releases (Pickup + Dropoff adjustments), 1 confirmed route polyline, ~2.5 dispatch rounds on average, and ~250–450 Firestore reads during active tracking.
+* **Drivers:** Online 8 hours/day sending location updates every 10 seconds (20, 100, 400, and 1,000 drivers across the 4 tiers).
 
-### Totals (Google Maps + Firebase)
+### Total Monthly Bill (Google Maps + Firebase — Before Applying $300 Credit)
 
-| Trips per month | **A. Now** | **B. Maps fix only** | **C. All fixes, hotspots removed** |
-|---|---|---|---|
-| 1,000 | ~$172 | ~$2 | **~$1** |
-| 10,000 | ~$2,520 | ~$20–77 | **~$11–68** |
-| 50,000 | ~$11,100 | ~$500–870 | **~$457–827** |
-| 150,000 | ~$23,000 | ~$1,610–2,660 | **~$1,475–2,525** |
+| Trips / Month | **A. Current Drag-Pin Code (Post-`9c98dc1`)** | **B. After On-Device Geocode + Route Cache ([`MAPS_COST_OPTIMIZATION_PLAN.md`](./MAPS_COST_OPTIMIZATION_PLAN.md))** | **C. After All Fixes (+ Driver GPS Throttle & Hotspots)** |
+| :--- | :--- | :--- | :--- |
+| **1,000** | ~$1 | **$0–$1** | **$0–$1** |
+| **10,000** | ~$185 | **~$11** ($0 Maps + ~$11 Firebase) | **~$10** ($0 Maps + ~$10 Firebase) |
+| **50,000** | ~$1,327 | **~$252** ($200 Maps + ~$52 Firebase) | **~$235** ($200 Maps + ~$35 Firebase) |
+| **150,000** | ~$4,180 | **~$870** ($700 Maps + ~$170 Firebase) | **~$815** ($700 Maps + ~$115 Firebase) |
 
-Each range depends on whether autocomplete uses search sessions (low number) or not (high number).
+### Detailed Breakdown for Column B (After [`MAPS_COST_OPTIMIZATION_PLAN.md`](./MAPS_COST_OPTIMIZATION_PLAN.md))
 
-### Breakdown for column C
-| Trips per month | Google Maps | Firestore reads | Firestore writes | Functions + Tasks | Auth, FCM, map display |
-|---|---|---|---|---|---|
-| 1,000 | $0 | $0 | ~$1 | $0 | Free |
-| 10,000 | $0–57 | ~$1 | ~$10 | $0 | Free |
-| 50,000 | $400–770 | ~$12 | ~$43 | ~$2 | Free |
-| 150,000 | $1,300–2,350 | ~$50 | ~$115 | ~$10 | Free |
+| Trips / Month | Pin-Drag Geocoding (On-Device) | Google Directions API (10k free/mo) | Firestore Reads & Writes | Cloud Functions + Cloud Tasks | Out of Pocket (With $300 Credit) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1,000** | **$0** | **$0** (Under 10k free) | ~$1 | **$0** (Free tier) | **$0** |
+| **10,000** | **$0** | **$0** (10k free tier) | ~$11 | **$0** (Free tier) | **$0** |
+| **50,000** | **$0** | **$200** (40k billable × $5/1k) | ~$51 | **~$1** (Tasks 100% Free) | **$0** ($252 covered by $300 credit) |
+| **150,000** | **$0** | **$700** (140k billable × $5/1k) | ~$163 | **~$7** (Tasks ~$0, Functions ~$7) | **~$570** (or ~$870 after credit ends) |
 
 ---
 
-## 3. Which plans to choose
+## 4. Optimization Status & Roadmap
 
-### Firebase: **Blaze (pay-as-you-go)**. Required.
-- Your Cloud Functions, and the planned Cloud Tasks dispatch, only run on Blaze.
-- Blaze still includes the free allowance: 50k reads and 20k writes a day, 2M function calls a month, 1M Cloud Tasks operations.
-- Keep functions in the **same region as Firestore**. Check where your database is in the console: a database's location can't be changed after it's created.
+### ✅ Completed
+* **[DONE — `9c98dc1`] Cloud Tasks Autonomous Dispatch & Client Polling Removal:**
+  * Replaced client-side 10s `searchRefreshedAt` writes in [`trip_tracking_screen.dart`](file:///Users/macbook/Desktop/rider/lib/screens/trip_tracking_screen.dart) with short (~1s) stateless Cloud Tasks rounds in [`findNearbyDrivers.js`](file:///Users/macbook/Desktop/rider/functions/findNearbyDrivers.js).
 
-### Google Maps: **pay-as-you-go. Don't subscribe yet.**
-| Plan | Price per month | Should you pick it? |
-|---|---|---|
-| Starter | $100, 50k calls | ❌ Doesn't include Autocomplete, Place Details or Routes |
-| Essentials | $275, 100k calls | ⏳ Only worth it above **about 20k trips a month**, and only if you don't use search sessions |
-| Pro | $1,200, 250k calls | ❌ Only makes sense if you keep the current code at 5k–11k trips a month. Fixing the code is far cheaper |
-| **Pay-as-you-go** | $0 base, 10k free calls per API each month | ✅ **$0 up to about 10k trips a month after the fixes** |
+### 🔴 Priority 1 — Implement [`MAPS_COST_OPTIMIZATION_PLAN.md`](./MAPS_COST_OPTIMIZATION_PLAN.md) in `map_provider.dart`
+1. **Free On-Device Reverse Geocoding on Pin Release:**
+   * Replace the paid HTTP `geocode/json` call in [`MapProvider._getAddressFromCoordinates()`](file:///Users/macbook/Desktop/rider/lib/providers/map_provider.dart#L927-L959) with `placemarkFromCoordinates()` from the `geocoding` package + a 4-decimal (`~11m`) coordinate cache (keeping HTTP only as an error fallback). **Saves ~$950/month at 50k trips.**
+2. **Smart Route Caching & 5-Layer Directions API Protection:**
+   * Only call `_updateRoute()` on the final Confirm step (not on `setPickupLocationSilent`, `addStop`, or waiting-time changes).
+   * Cache polylines by 4-decimal rounded coordinates (`~11m`).
+   * Combine multi-stop trips into a single request via `&waypoints=`.
+   * Enforce a **max 3 Directions calls per booking session** cap + **5s cooldown** so an indecisive or abusive user repeatedly moving the pin cannot burn Directions quota (fare & distance still calculate 100% locally via Haversine math).
 
-- Use the **$300 trial credit** for new customers to cover testing and the first weeks.
-- Review the plan choice when you pass **20k trips a month**. Also ask Google sales about volume discounts once you pass about 100k trips a month.
-
----
-
-## 4. Ways to save, in order of priority
-
-### 🔴 Must do before launch (Google Maps)
-1. **Switch to Places API (New) and use session tokens.** Use Autocomplete (New) with a `sessionToken`. Call Place Details **only when the user taps a result**, with field mask `location` (the Essentials level, $5). → **Saves about 95% of the Maps bill.**
-2. **Restrict search** with `includedRegionCodes: ["lb"]` and `locationBias` set to the user's position. Wait for at least 3 characters before searching, and raise the debounce from 500 to 700 ms. → **About 30–40% fewer autocomplete calls.**
-3. **Save recent and favourite places** (Home, Work, last 10 destinations) with `shared_preferences`. Show them before any search. → Many trips then need **no Places calls at all.**
-4. **Do reverse geocoding on the device** for pin drags with the `geocoding` package you already have. Drop the paid call in [map_provider.dart:927](file:///Users/macbook/Desktop/rider/lib/providers/map_provider.dart#L927-L960). → **Geocoding cost becomes $0.**
-5. **Switch to the Routes API** (Compute Routes Essentials) with a field mask. **Cache one route per trip**, and remove the debug `print` of the full response body.
-
-### 🟠 Firestore and Functions
-6. **Write driver location only when needed:** after 30–50 m of movement, or at most every 15–20 s while idle. → About **50–60% fewer writes**, which are now the biggest Firebase cost.
-7. **Search drivers by area in `findNearbyDrivers`.** Use a geohash range query plus `limit(20)`, so it doesn't read every online driver each round.
-8. **Merge the 3 `onDocumentUpdated("trips/{id}")` triggers** (refresh, notifications, rating) into one function. Return early when the fields it cares about haven't changed. → About **3 times fewer function calls.**
-9. **Trip history:** use one-off `get()` reads in pages with `limit(20)` instead of live listeners for completed and cancelled trips ([trip_history_screen.dart](file:///Users/macbook/Desktop/rider/lib/screens/trip_history_screen.dart#L340-L349)).
-10. **Remove hotspots**, or have it process only new trips. → Saves $0–65 a month.
-11. **Put driver location in a small separate document** (`driver_locations/{id}`) so the rider's live listener doesn't download the full driver profile on every update. The read count stays the same, but it uses less data and battery.
-
-### 🟢 Planned dispatch migration ([CLOUD_TASKS_DISPATCH.md](file:///Users/macbook/Desktop/rider/updates/CLOUD_TASKS_DISPATCH.md))
-- **Cost is about neutral, and it removes a hidden cost.** Today the app writes `searchRefreshedAt` every 10 s. Each of those writes triggers 3 functions plus a full driver query, up to 12 times per search.
-- Moving to Cloud Tasks: about 8 rounds per trip × ~1 s each fits inside the free allowance (1M operations a month) up to about 100k trips.
-- Do **#7 (search by area)** together with it, or every round will re-read all online drivers.
-
----
-
-## 5. Launch checklist (protects against a surprise bill)
-- [ ] **Budget alerts** in Cloud Billing at $25, $100 and $500.
-- [ ] **Daily quotas for each Maps API** to start with, for example Places 3,000 a day, Routes 2,000 a day, Geocoding 500 a day. Raise them as you grow.
-- [ ] **Restrict the API key** to your Android package and SHA-1, your iOS bundle ID, and only the APIs you use.
-- [ ] Turn on **Firebase App Check** for Firestore and Functions to block scripted abuse.
-- [ ] **Usage dashboard:** check reads, writes and function calls per day weekly for the first month and compare them with this report.
-- [ ] Include the **driver app** in the cost review. Its Directions calls for navigation are not counted here.
-
----
-
-## 6. Expected bill in practice
-
-| Stage | Trips per month | Expected monthly bill (after fixes) |
-|---|---|---|
-| Testing / soft launch | < 1,000 | **$0** (free allowances + $300 credit) |
-| Launch in one city | ~10,000 | **~$10–70** |
-| Growth | ~50,000 | **~$450–830** |
-| Scale | ~150,000 | **~$1,500–2,500** (ask Google sales for a discount) |
+### 🟠 Priority 2 — Firestore Optimizations for High Scale (> 20k Trips)
+3. **Throttle Driver Location Writes (Driver App):** Write driver GPS only after **30–50m of movement** or every **15–20s while idle** (cuts Firestore writes by **50–60%**).
+4. **Geohash Filter in `findEligibleDriversForTrip`:** Once you have **100+ simultaneous online drivers**, add a geohash bounding box + `.limit(30)`.
+5. **Paginate Trip History ([`trip_history_screen.dart`](file:///Users/macbook/Desktop/rider/lib/screens/trip_history_screen.dart#L340-L349)):** Use one-time `.get()` with `.limit(20)` for completed/cancelled trips instead of `.snapshots()`.

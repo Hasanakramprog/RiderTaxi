@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show ImageFilter;
 import 'dart:math' show min, max;
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../models/location_model.dart';
@@ -137,9 +138,9 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
   Color get _pinColor {
     switch (_step) {
       case _BookingStep.pickup:
-        return const Color(0xFF4CAF50);
+        return AppColors.success;
       case _BookingStep.dropoff:
-        return const Color(0xFFE53935);
+        return AppColors.danger;
       case _BookingStep.stop:
         return const Color(0xFFFF9800);
       case _BookingStep.confirm:
@@ -404,7 +405,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     final result = await showDialog<String>(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black38,
+      barrierColor: Colors.black26,
       builder:
           (ctx) => Dialog(
             backgroundColor: Colors.transparent,
@@ -415,10 +416,10 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: AppColors.border,
                       width: 1,
                     ),
                   ),
@@ -432,14 +433,14 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                         children: [
                           Icon(
                             Icons.map_outlined,
-                            color: Color(0xFFFFC107),
+                            color: AppColors.primary,
                             size: 22,
                           ),
                           SizedBox(width: 10),
                           Text(
                             'Leave Booking?',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                             ),
@@ -451,7 +452,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                       const Text(
                         'What would you like to do with your selected locations?',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                           height: 1.5,
                         ),
@@ -465,8 +466,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: const Text('Clear Map & Exit'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFFC107),
-                            foregroundColor: Colors.black,
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.onPrimary,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -483,15 +484,15 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           icon: const Icon(
                             Icons.bookmark_outline,
                             size: 18,
-                            color: Colors.white70,
+                            color: AppColors.textSecondary,
                           ),
                           label: const Text(
                             'Keep Locations & Exit',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(
-                              color: Colors.white24,
+                              color: AppColors.border,
                               width: 1,
                             ),
                             shape: RoundedRectangleBorder(
@@ -510,7 +511,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           child: const Text(
                             'Continue Booking',
                             style: TextStyle(
-                              color: Colors.white38,
+                              color: AppColors.textMuted,
                               fontSize: 13,
                             ),
                           ),
@@ -548,7 +549,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
         if (!didPop) _goBack();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.background,
         resizeToAvoidBottomInset: false,
         body: Stack(
           children: [
@@ -619,7 +620,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
               width: _isDragging ? 20 : 8,
               height: _isDragging ? 7 : 3,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(_isDragging ? 0.32 : 0.16),
+                color: AppColors.shadow.withOpacity(_isDragging ? 0.32 : 0.16),
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -666,12 +667,12 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withOpacity(0.96),
+        color: AppColors.surface.withOpacity(0.95),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: AppColors.shadow,
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -686,7 +687,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
               padding: EdgeInsets.all(10),
               child: Icon(
                 Icons.arrow_back_ios_new,
-                color: Color(0xFFFFC107),
+                color: AppColors.primary,
                 size: 18,
               ),
             ),
@@ -699,7 +700,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 key: ValueKey(_step),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
                 ),
@@ -715,19 +716,19 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 _StepDot(
                   active: _step == _BookingStep.pickup,
                   done: _step.index > 0,
-                  color: const Color(0xFF4CAF50),
+                  color: AppColors.success,
                 ),
                 const SizedBox(width: 4),
                 _StepDot(
                   active: _step == _BookingStep.dropoff,
                   done: _step.index > 1,
-                  color: const Color(0xFFE53935),
+                  color: AppColors.danger,
                 ),
                 const SizedBox(width: 4),
                 _StepDot(
                   active: _step == _BookingStep.confirm,
                   done: false,
-                  color: const Color(0xFFFFC107),
+                  color: AppColors.primary,
                 ),
               ],
             ),
@@ -784,7 +785,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
               width: 14,
               height: 14,
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50),
+                color: AppColors.success,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
@@ -803,18 +804,18 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF242424),
+                color: AppColors.surfaceAlt,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+                border: Border.all(color: AppColors.border),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.near_me, color: Color(0xFFFFC107), size: 18),
+                  Icon(Icons.near_me, color: AppColors.primary, size: 18),
                   SizedBox(width: 8),
                   Text(
                     'Use current location',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                 ],
               ),
@@ -847,7 +848,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 const _SheetHandle(),
                 _ConfirmedChip(
                   icon: Icons.circle,
-                  color: const Color(0xFF4CAF50),
+                  color: AppColors.success,
                   address: mp.pickupLocation?.address ?? 'Pickup',
                   onEdit: () => _editLocation(_BookingStep.pickup),
                 ),
@@ -855,12 +856,12 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   margin: const EdgeInsets.only(left: 6, top: 5, bottom: 5),
                   width: 2,
                   height: 18,
-                  color: Colors.white12,
+                  color: AppColors.border,
                 ),
                 _AddressRow(
                   dot: const Icon(
                     Icons.location_on,
-                    color: Color(0xFFE53935),
+                    color: AppColors.danger,
                     size: 20,
                   ),
                   address:
@@ -877,11 +878,11 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   icon: const Icon(
                     Icons.add_circle_outline,
                     size: 16,
-                    color: Color(0xFFFFC107),
+                    color: AppColors.primary,
                   ),
                   label: const Text(
                     'Add a stop',
-                    style: TextStyle(color: Color(0xFFFFC107), fontSize: 13),
+                    style: TextStyle(color: AppColors.primary, fontSize: 13),
                   ),
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
@@ -920,7 +921,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 '${_editingStopIndex + 1}',
                 style: const TextStyle(
                   fontSize: 10,
-                  color: Colors.black,
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -952,14 +953,14 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                 child: OutlinedButton(
                   onPressed: _removeCurrentStop,
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.redAccent),
+                    side: const BorderSide(color: AppColors.danger),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   child: const Text(
                     'REMOVE',
-                    style: TextStyle(color: Colors.redAccent, fontSize: 13),
+                    style: TextStyle(color: AppColors.danger, fontSize: 13),
                   ),
                 ),
               ),
@@ -998,15 +999,15 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF242424),
+                  color: AppColors.surfaceAlt,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white10),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   children: [
                     _ConfirmedChip(
                       icon: Icons.circle,
-                      color: const Color(0xFF4CAF50),
+                      color: AppColors.success,
                       address: mp.pickupLocation?.address ?? 'Pickup',
                       onEdit: () => _editLocation(_BookingStep.pickup),
                     ),
@@ -1024,7 +1025,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                               ),
                               width: 2,
                               height: 12,
-                              color: Colors.white12,
+                              color: AppColors.border,
                             ),
                             _ConfirmedChip(
                               icon: Icons.circle,
@@ -1045,11 +1046,11 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                       margin: const EdgeInsets.only(left: 6, top: 8, bottom: 4),
                       width: 2,
                       height: 14,
-                      color: Colors.white12,
+                      color: AppColors.border,
                     ),
                     _ConfirmedChip(
                       icon: Icons.location_on,
-                      color: const Color(0xFFE53935),
+                      color: AppColors.danger,
                       address: mp.dropoffLocation?.address ?? 'Destination',
                       onEdit: () => _editLocation(_BookingStep.dropoff),
                     ),
@@ -1060,12 +1061,12 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                         icon: const Icon(
                           Icons.add_circle_outline,
                           size: 13,
-                          color: Color(0xFFFFC107),
+                          color: AppColors.primary,
                         ),
                         label: const Text(
                           'Add stop',
                           style: TextStyle(
-                            color: Color(0xFFFFC107),
+                            color: AppColors.primary,
                             fontSize: 12,
                           ),
                         ),
@@ -1088,7 +1089,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   const Text(
                     'Select Ride Class',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -1099,10 +1100,10 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFC107).withValues(alpha: 0.12),
+                      color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: const Color(0xFFFFC107).withValues(alpha: 0.35),
+                        color: AppColors.primary.withValues(alpha: 0.35),
                         width: 1,
                       ),
                     ),
@@ -1118,13 +1119,13 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           Icon(
                             selOption.icon,
                             size: 13,
-                            color: const Color(0xFFFFC107),
+                            color: AppColors.primary,
                           ),
                         const SizedBox(width: 4),
                         Text(
                           '${selOption.name} • ${selOption.capacity}',
                           style: const TextStyle(
-                            color: Color(0xFFFFC107),
+                            color: AppColors.primary,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1162,23 +1163,21 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                               decoration: BoxDecoration(
                                 color:
                                     isSelected
-                                        ? const Color(0xFFFFC107).withValues(alpha: 0.14)
-                                        : const Color(0xFF242424),
+                                        ? AppColors.primary.withValues(alpha: 0.14)
+                                        : AppColors.surfaceAlt,
                                 borderRadius: BorderRadius.circular(13),
                                 border: Border.all(
                                   color:
                                       isSelected
-                                          ? const Color(0xFFFFC107)
-                                          : Colors.white12,
+                                          ? AppColors.primary
+                                          : AppColors.border,
                                   width: isSelected ? 2 : 1,
                                 ),
                                 boxShadow:
                                     isSelected
                                         ? [
                                           BoxShadow(
-                                            color: const Color(
-                                              0xFFFFC107,
-                                            ).withValues(alpha: 0.2),
+                                            color: AppColors.primary.withValues(alpha: 0.2),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -1207,8 +1206,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                                             size: 24,
                                             color:
                                                 isSelected
-                                                    ? const Color(0xFFFFC107)
-                                                    : Colors.grey.shade400,
+                                                    ? AppColors.primary
+                                                    : AppColors.textMuted,
                                           ),
                                         const SizedBox(height: 5),
                                         FittedBox(
@@ -1218,8 +1217,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                                             style: TextStyle(
                                               color:
                                                   isSelected
-                                                      ? Colors.white
-                                                      : Colors.grey.shade300,
+                                                      ? AppColors.textPrimary
+                                                      : AppColors.textSecondary,
                                               fontSize: 11,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -1236,8 +1235,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                                               fontSize: 10.5,
                                               color:
                                                   isSelected
-                                                      ? const Color(0xFFFFC107)
-                                                      : Colors.grey.shade400,
+                                                      ? AppColors.primary
+                                                      : AppColors.textMuted,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -1258,8 +1257,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                                           color:
                                               ride.badgeColor ??
                                               (isSelected
-                                                  ? const Color(0xFFFFC107)
-                                                  : Colors.white24),
+                                                  ? AppColors.primary
+                                                  : AppColors.border),
                                           borderRadius:
                                               BorderRadius.circular(4),
                                         ),
@@ -1270,8 +1269,8 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                                                 ride.badgeColor != null
                                                     ? Colors.white
                                                     : (isSelected
-                                                        ? Colors.black
-                                                        : Colors.white),
+                                                        ? Colors.white
+                                                        : AppColors.textSecondary),
                                             fontSize: 8,
                                             fontWeight: FontWeight.w800,
                                           ),
@@ -1300,9 +1299,9 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   ),
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF242424),
+                    color: AppColors.surfaceAlt,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white10),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1314,14 +1313,14 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                             '${mp.estimatedDistance.toStringAsFixed(1)} km  •  ${mp.estimatedDuration} min',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade400,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                           const Text(
                             'Cash on Arrival',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white70,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
@@ -1331,7 +1330,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFFFC107),
+                          color: AppColors.primary,
                         ),
                       ),
                     ],
@@ -1383,7 +1382,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
     showDialog(
       context: context,
       barrierDismissible: false,
-      barrierColor: Colors.black38,
+      barrierColor: Colors.black26,
       builder:
           (_) => Dialog(
             backgroundColor: Colors.transparent,
@@ -1397,22 +1396,22 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                     vertical: 28,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: AppColors.border,
                       width: 1,
                     ),
                   ),
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(color: Color(0xFFFFC107)),
+                      CircularProgressIndicator(color: AppColors.primary),
                       SizedBox(height: 18),
                       Text(
                         'Creating trip...',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1504,7 +1503,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
       Navigator.of(context).pop();
       showDialog(
         context: context,
-        barrierColor: Colors.black38,
+        barrierColor: Colors.black26,
         builder:
             (_) => Dialog(
               backgroundColor: Colors.transparent,
@@ -1516,10 +1515,10 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.10),
+                      color: AppColors.surface,
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
+                        color: AppColors.border,
                         width: 1,
                       ),
                     ),
@@ -1531,14 +1530,14 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                           children: [
                             Icon(
                               Icons.error_outline,
-                              color: Colors.redAccent,
+                              color: AppColors.danger,
                               size: 22,
                             ),
                             SizedBox(width: 8),
                             Text(
                               'Trip Error',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1549,7 +1548,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                         Text(
                           'Failed to create trip: $e',
                           style: const TextStyle(
-                            color: Colors.white70,
+                            color: AppColors.textSecondary,
                             fontSize: 13,
                             height: 1.5,
                           ),
@@ -1562,7 +1561,7 @@ class _TripRequestScreenProState extends State<TripRequestScreenPro>
                             child: const Text(
                               'OK',
                               style: TextStyle(
-                                color: Color(0xFFFFC107),
+                                color: AppColors.primary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1597,11 +1596,11 @@ class _SheetWrapper extends StatelessWidget {
         MediaQuery.of(context).padding.bottom + 16,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF181818),
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black54,
+            color: AppColors.shadow,
             blurRadius: 20,
             offset: Offset(0, -4),
           ),
@@ -1621,7 +1620,7 @@ class _SheetHandle extends StatelessWidget {
       height: 4,
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade700,
+        color: AppColors.border,
         borderRadius: BorderRadius.circular(2),
       ),
     ),
@@ -1650,7 +1649,7 @@ class _AddressRow extends StatelessWidget {
           child: Text(
             address,
             style: TextStyle(
-              color: isLoading ? Colors.grey.shade500 : Colors.white,
+              color: isLoading ? AppColors.textMuted : AppColors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
               height: 1.3,
@@ -1667,7 +1666,7 @@ class _AddressRow extends StatelessWidget {
               height: 14,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFFFFC107),
+                color: AppColors.primary,
               ),
             ),
           ),
@@ -1713,7 +1712,7 @@ class _ConfirmedChip extends StatelessWidget {
             Text(
               address,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
@@ -1730,7 +1729,7 @@ class _ConfirmedChip extends StatelessWidget {
           child: Icon(
             Icons.edit_location_alt_outlined,
             size: 16,
-            color: Colors.white38,
+            color: AppColors.textMuted,
           ),
         ),
       ),
@@ -1756,12 +1755,12 @@ class _PrimaryButton extends StatelessWidget {
     child: ElevatedButton(
       onPressed: enabled ? onPressed : null,
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFFFC107),
-        foregroundColor: Colors.black,
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        disabledBackgroundColor: Colors.grey.shade800,
-        disabledForegroundColor: Colors.grey.shade600,
+        disabledBackgroundColor: AppColors.border,
+        disabledForegroundColor: AppColors.textMuted,
       ),
       child: Text(
         label,
@@ -1794,10 +1793,10 @@ class _StepDot extends StatelessWidget {
     decoration: BoxDecoration(
       color:
           done
-              ? const Color(0xFF4CAF50)
+              ? AppColors.success
               : active
               ? color
-              : Colors.white24,
+              : AppColors.border,
       borderRadius: BorderRadius.circular(4),
     ),
   );
@@ -1809,7 +1808,7 @@ class _MyLocationFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Colors.white,
+    color: AppColors.surface,
     borderRadius: BorderRadius.circular(14),
     elevation: 4,
     child: InkWell(
@@ -1817,7 +1816,7 @@ class _MyLocationFab extends StatelessWidget {
       onTap: onTap,
       child: const Padding(
         padding: EdgeInsets.all(10),
-        child: Icon(Icons.my_location, color: Color(0xFF1A1A1A), size: 20),
+        child: Icon(Icons.my_location, color: AppColors.textPrimary, size: 20),
       ),
     ),
   );

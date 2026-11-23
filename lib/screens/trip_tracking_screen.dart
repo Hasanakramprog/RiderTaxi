@@ -6,22 +6,22 @@ import '../providers/map_provider.dart';
 import '../widgets/map_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import '../services/trip_persistence_service.dart';
 import '../widgets/network_connectivity_widgets.dart';
 import '../main.dart' show navigatorKey;
 import 'home_screen_pro.dart';
+import '../theme/app_colors.dart';
 
 // ── Design constants (matches HomeScreenPro / TripRequestScreenPro) ──
-const _kBg = Color(0xFF121212);
-const _kSurface = Color(0xFF1E1E1E);
-const _kSurface2 = Color(0xFF2A2A2A);
-const _kGold = Color(0xFFFFC107);
-const _kGoldLight = Color(0xFFFFD54F);
-const _kGreen = Color(0xFF4CAF50);
-const _kRed = Color(0xFFE53935);
-const _kOrange = Color(0xFFFF9800);
+const _kBg = AppColors.background;
+const _kSurface = AppColors.surface;
+const _kSurface2 = AppColors.surfaceAlt;
+const _kGold = AppColors.primary;
+const _kGoldLight = AppColors.primaryLight;
+const _kGreen = AppColors.success;
+const _kRed = AppColors.danger;
+const _kOrange = AppColors.warning;
 
 class TripTrackingScreen extends StatefulWidget {
   final String tripId;
@@ -351,12 +351,12 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A).withOpacity(0.92),
+            color: Colors.white.withOpacity(0.95),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: AppColors.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.5),
+                color: AppColors.shadow,
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -386,7 +386,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     key: ValueKey(_tripStatus),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                       letterSpacing: 0.3,
@@ -529,7 +529,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                   decoration: BoxDecoration(
                     color: _kSurface.withOpacity(0.95),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: AppColors.border),
                   ),
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
@@ -543,7 +543,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           Text(
                             'Cancel Trip?',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                             ),
@@ -554,7 +554,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       const Text(
                         'Are you sure you want to cancel your trip request?',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                           height: 1.5,
                         ),
@@ -588,7 +588,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(ctx).pop(),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white24),
+                            side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -596,7 +596,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           ),
                           child: const Text(
                             'Keep Trip',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),
                       ),
@@ -638,7 +638,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                   decoration: BoxDecoration(
                     color: _kSurface.withOpacity(0.95),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: AppColors.border),
                   ),
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
                   child: Column(
@@ -648,7 +648,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       const Text(
                         'Cancel Trip?',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                         ),
@@ -657,7 +657,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       const Text(
                         'Are you sure you want to cancel this trip? Cancellation may incur fees.',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                           height: 1.5,
                         ),
@@ -669,14 +669,14 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             child: OutlinedButton(
                               onPressed: () => Navigator.of(ctx).pop(false),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.white24),
+                                side: const BorderSide(color: AppColors.border),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               child: const Text(
                                 'No',
-                                style: TextStyle(color: Colors.white70),
+                                style: TextStyle(color: AppColors.textSecondary),
                               ),
                             ),
                           ),
@@ -729,7 +729,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     decoration: BoxDecoration(
                       color: _kSurface.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: const Column(
                       mainAxisSize: MainAxisSize.min,
@@ -746,7 +746,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                         Text(
                           'Cancelling trip...',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -968,7 +968,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             const Text(
                               'Driver is on the way!',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1008,7 +1008,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                   driverData['baseFaceImageUrl'] == null
                                       ? const Icon(
                                         Icons.person,
-                                        color: Colors.black,
+                                        color: AppColors.textPrimary,
                                         size: 28,
                                       )
                                       : null,
@@ -1023,7 +1023,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                         driverData['name'] ??
                                         'Driver',
                                     style: const TextStyle(
-                                      color: Colors.white,
+                                      color: AppColors.textPrimary,
                                       fontSize: 17,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1046,7 +1046,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                       Text(
                                         '  (${driverData['ratingCount'] ?? 0} trips)',
                                         style: const TextStyle(
-                                          color: Colors.white38,
+                                          color: AppColors.textMuted,
                                           fontSize: 11,
                                         ),
                                       ),
@@ -1102,7 +1102,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             decoration: BoxDecoration(
                               color: _kSurface2,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white10),
+                              border: Border.all(color: AppColors.border),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1110,7 +1110,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                 const Text(
                                   'Vehicle',
                                   style: TextStyle(
-                                    color: Colors.white38,
+                                    color: AppColors.textMuted,
                                     fontSize: 11,
                                     letterSpacing: 0.5,
                                   ),
@@ -1121,13 +1121,13 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                     const Icon(
                                       Icons.directions_car,
                                       size: 16,
-                                      color: Colors.white54,
+                                      color: AppColors.textSecondary,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
                                       '${carDetails['color'] ?? 'N/A'}  ${carDetails['model'] ?? 'Car'}',
                                       style: const TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.textPrimary,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -1139,13 +1139,13 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                     const Icon(
                                       Icons.badge_outlined,
                                       size: 16,
-                                      color: Colors.white54,
+                                      color: AppColors.textSecondary,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
                                       'Plate: ${carDetails['plateNumber'] ?? 'N/A'}',
                                       style: const TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.textPrimary,
                                         fontSize: 13,
                                       ),
                                     ),
@@ -1227,7 +1227,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                 onPressed: () => Navigator.of(ctx).pop(),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: _kGold,
-                                  foregroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -1341,7 +1341,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                   decoration: BoxDecoration(
                     color: _kSurface.withOpacity(0.95),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: AppColors.border),
                   ),
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
@@ -1359,7 +1359,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           Text(
                             'No Drivers Available',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.textPrimary,
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1370,7 +1370,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       const Text(
                         'We couldn\'t find any available drivers in your area. Would you like to try again?',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                           height: 1.5,
                         ),
@@ -1393,7 +1393,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _kGold,
-                            foregroundColor: Colors.black,
+                            foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -1415,7 +1415,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             _navigateHome();
                           },
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white24),
+                            side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1423,7 +1423,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           ),
                           child: const Text(
                             'CANCEL',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),
                       ),
@@ -1507,7 +1507,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     ),
                     child: const Icon(
                       Icons.local_taxi,
-                      color: Colors.black,
+                      color: AppColors.textPrimary,
                       size: 26,
                     ),
                   ),
@@ -1535,7 +1535,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
             child: const Text(
               'Finding Your Driver',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5,
@@ -1548,7 +1548,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 ? 'Taking a bit longer than usual...'
                 : 'Scanning nearby drivers in your area',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
+              color: AppColors.textSecondary,
               fontSize: 13,
             ),
             textAlign: TextAlign.center,
@@ -1575,7 +1575,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 height: 84,
                 child: CircularProgressIndicator(
                   value: _progressValue,
-                  backgroundColor: Colors.white12,
+                  backgroundColor: AppColors.border,
                   valueColor: const AlwaysStoppedAnimation<Color>(_kGold),
                   strokeWidth: 7,
                   strokeCap: StrokeCap.round,
@@ -1603,7 +1603,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
           const Text(
             'Awaiting Driver Confirmation',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -1612,7 +1612,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
           Text(
             'Your request has been sent. Waiting for a driver to accept...',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
+              color: AppColors.textSecondary,
               fontSize: 13,
               height: 1.5,
             ),
@@ -1658,14 +1658,14 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     Text(
                       'Driver on the Way!',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       'Your ride is confirmed',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1692,7 +1692,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     ),
                     const Text(
                       'ETA',
-                      style: TextStyle(color: Colors.white38, fontSize: 9),
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 9),
                     ),
                   ],
                 ),
@@ -1755,7 +1755,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 const SizedBox(height: 2),
                 const Text(
                   'Please head to your pickup point',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -1816,7 +1816,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                   ),
                   child: const Icon(
                     Icons.directions_car,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                     size: 22,
                   ),
                 ),
@@ -1829,7 +1829,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     const Text(
                       'Trip in Progress',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1837,7 +1837,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                     Text(
                       dropoffAddress,
                       style: const TextStyle(
-                        color: Colors.white54,
+                        color: AppColors.textSecondary,
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -1939,7 +1939,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       child: const Text(
                         '🎉 Trip Completed',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1967,7 +1967,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           Text(
                             'Total Fare',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.5),
+                              color: AppColors.textSecondary,
                               fontSize: 13,
                             ),
                           ),
@@ -1983,7 +1983,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           const SizedBox(height: 16),
                           Container(
                             height: 1,
-                            color: Colors.white.withOpacity(0.06),
+                            color: AppColors.border,
                           ),
                           const SizedBox(height: 16),
                           Row(
@@ -2015,7 +2015,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                           onPressed: () => _showRatingDialog(_tripData!),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _kGold,
-                            foregroundColor: Colors.black,
+                            foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -2048,7 +2048,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             const Text(
                               'Your rating: ',
                               style: TextStyle(
-                                color: Colors.white54,
+                                color: AppColors.textSecondary,
                                 fontSize: 13,
                               ),
                             ),
@@ -2083,7 +2083,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       child: const Text(
                         'BACK TO HOME',
                         style: TextStyle(
-                          color: Colors.white38,
+                          color: AppColors.textMuted,
                           fontSize: 13,
                           letterSpacing: 0.5,
                         ),
@@ -2127,7 +2127,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                       ? 'You cancelled this trip'
                       : 'Trip was cancelled',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2135,7 +2135,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 const SizedBox(height: 6),
                 Text(
                   cancelledReason,
-                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                 ),
               ],
             ),
@@ -2148,7 +2148,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
               onPressed: _navigateHome,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kGold,
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -2191,7 +2191,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 Text(
                   'No Drivers Available',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2199,7 +2199,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 SizedBox(height: 6),
                 Text(
                   'We couldn\'t find drivers in your area right now.',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -2222,7 +2222,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kGold,
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -2243,7 +2243,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
             onPressed: _navigateHome,
             child: const Text(
               'Back to Home',
-              style: TextStyle(color: Colors.white38, fontSize: 13),
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
             ),
           ),
         ],
@@ -2263,9 +2263,9 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
       decoration: BoxDecoration(
         color: _kSurface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: AppColors.border),
         boxShadow: const [
-          BoxShadow(color: Colors.black, blurRadius: 24, offset: Offset(0, -4)),
+          BoxShadow(color: AppColors.textPrimary, blurRadius: 24, offset: Offset(0, -4)),
         ],
       ),
       child: child,
@@ -2286,7 +2286,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
         const SizedBox(height: 14),
         Text(
           message,
-          style: const TextStyle(color: Colors.white54, fontSize: 13),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         const SizedBox(height: 8),
       ],
@@ -2304,7 +2304,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
       decoration: BoxDecoration(
         color: _kSurface2,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -2331,7 +2331,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
             ),
             child:
                 photoUrl == null
-                    ? const Icon(Icons.person, color: Colors.black, size: 26)
+                    ? const Icon(Icons.person, color: AppColors.textPrimary, size: 26)
                     : null,
           ),
           const SizedBox(width: 12),
@@ -2342,7 +2342,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 Text(
                   name,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2360,7 +2360,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                 if (subtitle != null)
                   Text(
                     subtitle,
-                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -2424,7 +2424,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
         content: Text(
           message,
           style: TextStyle(
-            color: color == _kGold ? Colors.black : Colors.white,
+            color: color == _kGold ? Colors.white : AppColors.textPrimary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -2483,7 +2483,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                               ),
                               child: const Icon(
                                 Icons.star_rounded,
-                                color: Colors.black,
+                                color: AppColors.textPrimary,
                                 size: 32,
                               ),
                             ),
@@ -2491,7 +2491,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             const Text(
                               'Rate Your Trip',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -2500,7 +2500,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                             const Text(
                               'How was your ride experience?',
                               style: TextStyle(
-                                color: Colors.white54,
+                                color: AppColors.textSecondary,
                                 fontSize: 13,
                               ),
                             ),
@@ -2537,7 +2537,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                         () => Navigator.of(dialogContext).pop(),
                                     style: OutlinedButton.styleFrom(
                                       side: const BorderSide(
-                                        color: Colors.white24,
+                                        color: AppColors.border,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
@@ -2548,7 +2548,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                     ),
                                     child: const Text(
                                       'Skip',
-                                      style: TextStyle(color: Colors.white54),
+                                      style: TextStyle(color: AppColors.textSecondary),
                                     ),
                                   ),
                                 ),
@@ -2588,7 +2588,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                                             20,
                                                           ),
                                                       border: Border.all(
-                                                        color: Colors.white12,
+                                                        color: AppColors.border,
                                                       ),
                                                     ),
                                                     child: const Column(
@@ -2608,7 +2608,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                                         Text(
                                                           'Submitting your rating...',
                                                           style: TextStyle(
-                                                            color: Colors.white,
+                                                            color: AppColors.textPrimary,
                                                             fontSize: 14,
                                                             fontWeight:
                                                                 FontWeight.w500,
@@ -2649,7 +2649,7 @@ class _TripTrackingScreenState extends State<TripTrackingScreen>
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: _kGold,
-                                      foregroundColor: Colors.black,
+                                      foregroundColor: Colors.white,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
@@ -2691,7 +2691,7 @@ class _SheetHandle extends StatelessWidget {
       width: 36,
       height: 4,
       decoration: BoxDecoration(
-        color: Colors.white24,
+        color: AppColors.border,
         borderRadius: BorderRadius.circular(2),
       ),
     ),
@@ -2716,9 +2716,9 @@ class _TripStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF242424),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2728,7 +2728,7 @@ class _TripStatTile extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: valueColor ?? Colors.white,
+              color: valueColor ?? AppColors.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
@@ -2737,7 +2737,7 @@ class _TripStatTile extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.45),
+              color: AppColors.textSecondary,
               fontSize: 10,
               fontWeight: FontWeight.w500,
             ),
@@ -2852,7 +2852,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(20, 14, 20, bottom + 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF1E1E1E),
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(
           top: BorderSide(color: Color(0x10FFFFFF)),
@@ -2861,7 +2861,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black54,
+            color: AppColors.shadow,
             blurRadius: 24,
             offset: Offset(0, -4),
           ),
@@ -2877,7 +2877,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
               height: 4,
               margin: const EdgeInsets.only(bottom: 14),
               decoration: BoxDecoration(
-                color: Colors.white24,
+                color: AppColors.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -2970,7 +2970,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                   ),
                   child: const Icon(
                     Icons.local_taxi,
-                    color: Colors.black,
+                    color: AppColors.textPrimary,
                     size: 24,
                   ),
                 ),
@@ -2982,7 +2982,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         const Text(
           'Finding Your Driver',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -2990,7 +2990,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         const SizedBox(height: 6),
         Text(
           'Scanning nearby drivers in your area...',
-          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 22),
@@ -3012,7 +3012,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
               height: 72,
               child: CircularProgressIndicator(
                 value: widget.progressValue.clamp(0.0, 1.0),
-                backgroundColor: Colors.white12,
+                backgroundColor: AppColors.border,
                 valueColor:
                     const AlwaysStoppedAnimation<Color>(_kGold),
                 strokeWidth: 6,
@@ -3026,7 +3026,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         const Text(
           'Driver Requested',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textPrimary,
             fontSize: 17,
             fontWeight: FontWeight.bold,
           ),
@@ -3034,7 +3034,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         const SizedBox(height: 6),
         Text(
           'Waiting for a driver to accept your ride',
-          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 22),
@@ -3057,12 +3057,12 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withOpacity(0.15),
+                color: AppColors.success.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
                 Icons.directions_car,
-                color: Color(0xFF4CAF50),
+                color: AppColors.success,
                 size: 22,
               ),
             ),
@@ -3074,14 +3074,14 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                   Text(
                     'Driver on the Way!',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     'Your ride is confirmed',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
@@ -3106,7 +3106,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                     ),
                     const Text(
                       'ETA',
-                      style: TextStyle(color: Colors.white38, fontSize: 9),
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 9),
                     ),
                   ],
                 ),
@@ -3132,22 +3132,22 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF4CAF50).withOpacity(0.12),
+            color: AppColors.success.withOpacity(0.12),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.35)),
+            border: Border.all(color: AppColors.success.withOpacity(0.35)),
           ),
           child: Column(
             children: [
               const Icon(
                 Icons.check_circle_rounded,
-                color: Color(0xFF4CAF50),
+                color: AppColors.success,
                 size: 42,
               ),
               const SizedBox(height: 6),
               const Text(
                 'Your Driver Has Arrived!',
                 style: TextStyle(
-                  color: Color(0xFF4CAF50),
+                  color: AppColors.success,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -3155,7 +3155,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
               const SizedBox(height: 2),
               const Text(
                 'Please head to your pickup point',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
               ),
             ],
           ),
@@ -3191,7 +3191,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                 gradient: const LinearGradient(colors: [_kGold, _kGoldLight]),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.directions_car, color: Colors.black, size: 22),
+              child: const Icon(Icons.directions_car, color: AppColors.textPrimary, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -3201,14 +3201,14 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                   const Text(
                     'Trip in Progress',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     dropoff,
-                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -3238,18 +3238,18 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.cancel_rounded, color: Color(0xFFE53935), size: 52),
+        const Icon(Icons.cancel_rounded, color: AppColors.danger, size: 52),
         const SizedBox(height: 12),
         const Text(
           'Trip Cancelled',
           style: TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
         Text(
           'Your trip has been cancelled.',
           style:
-              TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+              TextStyle(color: AppColors.textSecondary, fontSize: 13),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 22),
@@ -3267,18 +3267,18 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
       mainAxisSize: MainAxisSize.min,
       children: [
         const Icon(Icons.car_crash_rounded,
-            color: Color(0xFFFF9800), size: 52),
+            color: AppColors.warning, size: 52),
         const SizedBox(height: 12),
         const Text(
           'No Drivers Available',
           style: TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
         Text(
           'We could not find a driver in your area right now. Please try again.',
           style:
-              TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+              TextStyle(color: AppColors.textSecondary, fontSize: 13),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 22),
@@ -3292,7 +3292,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
             onPressed: widget.onGoHome,
             child: const Text(
               'Back to Home',
-              style: TextStyle(color: Colors.white54, fontSize: 13),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
           ),
         ] else
@@ -3315,7 +3315,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
           SizedBox(height: 14),
           Text(
             'Loading trip...',
-            style: TextStyle(color: Colors.white54, fontSize: 13),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
         ],
       ),
@@ -3362,11 +3362,11 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF252525),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: AppColors.border),
         boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4))
+          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, 4))
         ],
       ),
       child: Column(
@@ -3396,7 +3396,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                       : null,
                 ),
                 child: photoUrl == null
-                    ? const Icon(Icons.person, color: Colors.black, size: 28)
+                    ? const Icon(Icons.person, color: AppColors.textPrimary, size: 28)
                     : null,
               ),
               const SizedBox(width: 12),
@@ -3407,7 +3407,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                     Text(
                       name,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
@@ -3423,12 +3423,12 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                         if (trips != null) ...[
                           Text(
                             '  ·  ',
-                            style: TextStyle(color: Colors.white.withOpacity(0.3)),
+                            style: TextStyle(color: AppColors.textSecondary),
                           ),
-                          const Icon(Icons.directions_car_filled, size: 12, color: Colors.white38),
+                          const Icon(Icons.directions_car_filled, size: 12, color: AppColors.textMuted),
                           Text(
                             ' $trips trips',
-                            style: const TextStyle(color: Colors.white38, fontSize: 12),
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
                           ),
                         ],
                       ],
@@ -3447,7 +3447,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                 const SizedBox(height: 12),
                 Container(
                   height: 1,
-                  color: Colors.white.withOpacity(0.06),
+                  color: AppColors.border,
                 ),
                 const SizedBox(height: 12),
 
@@ -3472,7 +3472,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                             Text(
                               '${carColor != null ? '$carColor ' : ''}$carModel${carType != null ? ' ($carType)' : ''}',
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: AppColors.textPrimary,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -3481,7 +3481,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                             Text(
                               carPlate,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
+                                color: AppColors.textSecondary,
                                 fontSize: 12,
                                 letterSpacing: 1.2,
                               ),
@@ -3494,14 +3494,14 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A),
+                          color: AppColors.surface,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white.withOpacity(0.15)),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Text(
                           carPlate,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.5,
@@ -3525,21 +3525,21 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
                     child: Container(
                       height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withOpacity(0.13),
+                        color: AppColors.success.withOpacity(0.13),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: const Color(0xFF4CAF50).withOpacity(0.35)),
+                            color: AppColors.success.withOpacity(0.35)),
                       ),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.phone_rounded,
-                              color: Color(0xFF4CAF50), size: 18),
+                              color: AppColors.success, size: 18),
                           SizedBox(width: 6),
                           Text(
                             'Call',
                             style: TextStyle(
-                              color: Color(0xFF4CAF50),
+                              color: AppColors.success,
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                             ),
@@ -3596,14 +3596,14 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
       child: OutlinedButton.icon(
         onPressed: widget.onCancelTrip,
         icon: const Icon(Icons.close_rounded, size: 16,
-            color: Color(0xFFE53935)),
+            color: AppColors.danger),
         label: const Text(
           'Cancel Trip',
           style: TextStyle(
-              color: Color(0xFFE53935), fontWeight: FontWeight.w600),
+              color: AppColors.danger, fontWeight: FontWeight.w600),
         ),
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFE53935), width: 1),
+          side: const BorderSide(color: AppColors.danger, width: 1),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14)),
         ),
@@ -3620,7 +3620,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: _kGold,
-          foregroundColor: Colors.black,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14)),
           elevation: 0,
@@ -3642,9 +3642,9 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF242424),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3654,7 +3654,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
           Text(
             value,
             style: TextStyle(
-              color: valueColor ?? Colors.white,
+              color: valueColor ?? AppColors.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: 13,
             ),
@@ -3663,7 +3663,7 @@ class _TripStatusSheetState extends State<_TripStatusSheet>
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.4),
+              color: AppColors.textSecondary,
               fontSize: 10,
             ),
           ),
